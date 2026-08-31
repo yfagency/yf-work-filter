@@ -1,0 +1,100 @@
+<style>
+/* YF WORK SEARCH — in the nav, Work page only.
+   Default hidden: the Work page's head code adds .is-on. */
+.yfwrk-search{display:none}
+.yfwrk-search.is-on{display:flex}
+.yfwrk-search{flex:1 1 auto;max-width:32rem;align-items:center;gap:.625rem;
+  border-bottom:1px solid rgba(39,39,39,.12);padding:7px 4px;cursor:text;
+  transition:border-color .2s}
+.yfwrk-search:focus-within{border-bottom-color:var(--brand--dark,#272727)}
+.yfwrk-search svg{flex:0 0 auto;opacity:.45;display:block}
+.yfwrk-search input{border:0;outline:0;background:none;width:100%;min-width:0;
+  font:400 15px/1 "Helvetica Neue",Arial,sans-serif;color:var(--brand--dark,#272727)}
+.yfwrk-search input::placeholder{color:#a4a199}
+.yfwrk-search-clear{flex:0 0 auto;border:0;background:none;cursor:pointer;padding:2px 4px;
+  font:600 10px/1 var(--mono,ui-monospace),monospace;letter-spacing:.1em;color:#a4a199;
+  text-transform:uppercase;opacity:0;pointer-events:none;transition:opacity .18s}
+.yfwrk-search-clear.is-on{opacity:1;pointer-events:auto}
+.yfwrk-search-clear:hover{color:var(--brand--dark,#272727)}
+
+/* PANEL — Work Mosaic's three columns, dropped from the nav.
+   top matches .znavbar height; the safe-area rule in the site head grows that
+   bar on islanded iPhones, so the panel offset follows the same env(). */
+.yfwrk-panel{position:fixed;top:4.75rem;left:50%;
+  transform:translateX(-50%) translateY(-8px);z-index:59;
+  width:min(80rem,calc(100vw - 2.5rem));background:var(--brand--light,#fffffb);
+  border-radius:0 0 20px 20px;box-shadow:0 24px 60px rgba(39,39,39,.16);
+  padding:1.75rem 1.625rem;opacity:0;pointer-events:none;
+  transition:opacity .22s,transform .22s}
+@supports (padding-top:env(safe-area-inset-top)){
+  .yfwrk-panel{top:calc(4.75rem + env(safe-area-inset-top,0px))}}
+.yfwrk-panel.is-open{opacity:1;pointer-events:auto;transform:translateX(-50%)}
+.yfwrk-panel-cols{display:grid;grid-template-columns:1fr 1fr 1fr}
+.yfwrk-pcol{padding:0 1.375rem;border-right:1px solid rgba(39,39,39,.12);min-width:0}
+.yfwrk-pcol:first-child{padding-left:0}
+.yfwrk-pcol:last-child{border-right:0}
+.yfwrk-pcol h5{font:700 12px/1 "Helvetica Neue",Arial,sans-serif;
+  letter-spacing:-.01em;margin-bottom:.875rem;color:var(--brand--dark,#272727)}
+.yfwrk-pcol h5.is-mut{color:#a4a199;font-weight:600}
+.yfwrk-pcol-note{font:500 11px/1.5 ui-monospace,monospace;color:#a4a199;padding:6px 0}
+.yfwrk-opt{display:flex;align-items:center;gap:.625rem;cursor:pointer;user-select:none;
+  padding:6px 0;font:500 14px/1.1 "Helvetica Neue",Arial,sans-serif;color:#6a6862;
+  transition:color .18s}
+.yfwrk-opt:hover{color:var(--brand--dark,#272727)}
+.yfwrk-opt-mk{flex:0 0 auto;width:10px;height:10px;border-radius:50%;
+  border:2px solid var(--dot,#a4a199);background:transparent;transition:.2s}
+.yfwrk-opt.is-on{color:var(--brand--dark,#272727);font-weight:600}
+.yfwrk-opt.is-on .yfwrk-opt-mk{background:var(--dot,#272727);border-color:var(--dot,#272727)}
+.yfwrk-opt-n{margin-left:auto;font:600 10px/1 ui-monospace,monospace;color:#a4a199}
+.yfwrk-opt.is-zero{opacity:.4;pointer-events:none}
+.yfwrk-panel-foot{display:flex;align-items:center;gap:1rem;margin-top:1.125rem;
+  padding-top:.875rem;border-top:1px solid rgba(39,39,39,.12)}
+.yfwrk-ct{font:600 11px/1 ui-monospace,monospace;color:#6a6862}
+.yfwrk-ct b{color:var(--brand--dark,#272727)}
+.yfwrk-reset{margin-left:auto;border:0;background:none;cursor:pointer;
+  font:600 11px/1 ui-monospace,monospace;letter-spacing:.1em;color:#6a6862;
+  text-transform:uppercase;transition:color .18s}
+.yfwrk-reset:hover{color:var(--brand--dark,#272727)}
+.yfwrk-scrim{position:fixed;inset:0;z-index:58;display:none}
+.yfwrk-scrim.is-on{display:block}
+
+/* Solution dot colours = Solutions collection `color`, hardcoded because a
+   static panel cannot read a CMS field. If a solution colour changes in the
+   CMS, change it here too. */
+.yfwrk-opt[data-v="brand"]{--dot:#61DDD6}
+.yfwrk-opt[data-v="crossborder"]{--dot:#91C3EB}
+.yfwrk-opt[data-v="content"]{--dot:#FFD347}
+.yfwrk-opt[data-v="event"]{--dot:#FF9CAD}
+.yfwrk-opt[data-v="digital"]{--dot:#EF94E9}
+.yfwrk-opt[data-v="campaign"]{--dot:#FFC86D}
+.yfwrk-opt[data-v="operation"]{--dot:#7CEF84}
+
+@media (max-width:767px){
+  .yfwrk-search{order:3;flex-basis:100%;max-width:none}
+  .yfwrk-panel{width:calc(100vw - 1.5rem);border-radius:20px;padding:1.25rem}
+  .yfwrk-panel-cols{grid-template-columns:1fr;gap:1.25rem}
+  .yfwrk-pcol{padding:0;border-right:0}
+  .yfwrk-pcol:not(:first-child){padding-top:1.25rem;border-top:1px solid rgba(39,39,39,.12)}
+}
+</style>
+
+<label class="yfwrk-search" data-worksearch>
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  <input type="text" id="yfwrk-q" placeholder="Search work" autocomplete="off" aria-label="Search work" />
+  <button class="yfwrk-search-clear" data-searchclear type="button">Clear</button>
+</label>
+
+<div class="yfwrk-scrim" data-workscrim></div>
+
+<div class="yfwrk-panel" data-workpanel>
+  <div class="yfwrk-panel-cols">
+    <div class="yfwrk-pcol"><h5 class="is-mut">Location</h5><div data-col="loc"></div></div>
+    <div class="yfwrk-pcol"><h5>Solution</h5><div data-col="sol"></div></div>
+    <div class="yfwrk-pcol"><h5 class="is-mut">Year</h5><div data-col="year"></div></div>
+  </div>
+  <div class="yfwrk-panel-foot">
+    <span class="yfwrk-ct" data-workcount></span>
+    <button class="yfwrk-reset" data-workreset type="button">Reset</button>
+  </div>
+</div>

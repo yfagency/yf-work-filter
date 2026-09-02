@@ -1,21 +1,217 @@
-/* YF - Work page grid + nav filter
+/* YF - Work page grid + nav filter  ·  v1.1.0
  * ---------------------------------------------------------------------------
  * Drives #work-grid on yfkk.co/work: the bento layout, the progressive reveal
- * and the search / Solution / Year filter in the nav bar.
+ * and the search / Solution / Year filter that sits in the nav bar.
  *
- * Loaded as a hosted script on the Work page (Webflow > Page settings), served
- * from jsDelivr and pinned to a tag. It lives here rather than in the page's
- * custom-code field because that field caps at 10,000 characters and this file
- * is past it - the cap is also why the previous inline version had to keep its
- * comments lean. It does not any more.
+ * SELF-CONTAINED as of v1.1.0. This one file carries its own CSS and its own
+ * markup and installs them at runtime, so the Work page needs no custom code
+ * at all - it is attached as a registered hosted script and nothing else.
+ * That is not a style preference: Webflow's Data API returns HTTP 406 for any
+ * write to page freeform code on this site, so page code cannot be authored
+ * programmatically. Registered scripts are the one writable path.
  *
- * Companion markup: the search field and filter panel are an HTML Embed inside
- * the "Z Nav Bar (mobile)" component. This script early-returns when
- * #work-grid is absent, so it is inert on every other page.
+ * It also means install and rollback are single operations:
+ *   install  - register the script, attach it to the Work page
+ *   rollback - remove_page_script, and switch .SolutionNav visibility back on
+ * The page Head/Footer code and the Z Nav Bar component are never touched.
+ *
+ * WHAT IT EXPECTS FROM THE PAGE
+ *   #work-grid                        the Projects Collection List wrapper
+ *   .projecttitle                     project name, per card (searched)
+ *   .yfwrk-cardsols .w-dyn-item       nested Solutions items; text = the name
+ *   [data-year-src]                   OPTIONAL per-card element whose text is
+ *                                     the year. Without it the Year column
+ *                                     hides itself and everything else works.
+ *   .zmenu / .znavmenublock           the nav row the search field moves into
+ *
+ * Facets are derived from rendered text because the Data API rejects attribute
+ * value bindings outright. lowercase(solution name) === its slug for all seven
+ * solutions, so the solution match is exact rather than the prefix guess the
+ * previous inline script used.
  *
  * Rationale for the non-obvious parts: Notion > Claude Knowledge Base >
- * Decisions & Learnings (2026-08-03 empty-cell fix, 2026-08-31 this rewrite).
+ * Decisions & Learnings (2026-08-03 empty-cell fix, 2026-08-31 rewrite,
+ * 2026-09-01 self-contained v1.1.0).
  * ------------------------------------------------------------------------- */
+
+/* ---- v1.1.0 self-install: CSS, markup, nav placement, facet derivation ----
+   Runs before init(). Everything it creates is marked data-yf-injected so a
+   future version can find and replace it. */
+(function(){
+  if(document.getElementById('yfwrk-css'))return;
+  if(!document.getElementById('work-grid'))return;   /* Work page only */
+
+  var css=document.createElement('style');
+  css.id='yfwrk-css';
+  css.textContent=`/* hidden per-card Year source (see YEAR STEP above) */
+#work-grid [data-year-src]{display:none !important}
+/* Year column hides itself until a year source exists */
+.yfwrk-pcol:has([data-col="year"]:empty){display:none}
+
+/* search field - moved into the nav by the script below */
+.yfwrk-search{
+  display:none; flex:1 1 auto; max-width:26rem; align-items:center; gap:.5rem;
+  border-bottom:1px solid var(--lines--border,#27272733);
+  padding:.4375rem .25rem; cursor:text; min-width:0;
+  transition:border-color .22s ease}
+.yfwrk-search.is-live{display:flex}
+.yfwrk-search:focus-within{border-bottom-color:var(--brand--dark,#272727)}
+.yfwrk-search svg{flex:0 0 auto; display:block; opacity:.45}
+.yfwrk-search input{
+  border:0; outline:0; background:none; width:100%; min-width:0; padding:0;
+  font-family:var(--typography--family--text,Inter),sans-serif;
+  font-size:.9375rem; font-weight:400; line-height:1;
+  color:var(--brand--dark,#272727)}
+.yfwrk-search input::placeholder{color:var(--text--text-light,#27272780)}
+.yfwrk-search-clear{
+  flex:0 0 auto; border:0; background:none; cursor:pointer; padding:.125rem .25rem;
+  font-family:var(--typography--family--meta,"Sometype Mono"),monospace;
+  font-size:.625rem; font-weight:500; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--text--text-light,#27272780);
+  opacity:0; pointer-events:none; transition:opacity .18s ease}
+.yfwrk-search-clear.is-on{opacity:1; pointer-events:auto}
+.yfwrk-search-clear:hover{color:var(--brand--dark,#272727)}
+
+/* ---- panel: drops from the nav ---- */
+.yfwrk-panel{
+  position:fixed; top:4.75rem; left:50%;
+  transform:translateX(-50%) translateY(-.5rem); z-index:59;
+  width:min(80rem,calc(100vw - 2.5rem));
+  background:var(--backgrounds--pure-white,#fff);
+  border-radius:0 0 1.25rem 1.25rem;
+  box-shadow:0 1.5rem 3.75rem rgba(39,39,39,.14);
+  padding:1.75rem 1.625rem 1.375rem;
+  opacity:0; pointer-events:none; transition:opacity .22s ease,transform .22s ease}
+@supports (padding-top:env(safe-area-inset-top)){
+ .yfwrk-panel{top:calc(4.75rem + env(safe-area-inset-top,0px))}}
+.yfwrk-panel.is-open{opacity:1; pointer-events:auto; transform:translateX(-50%)}
+.yfwrk-panel-cols{display:grid; grid-template-columns:1fr 1fr 1fr}
+.yfwrk-pcol{padding:0 1.375rem; border-right:1px solid var(--lines--separator,#d9d9d5); min-width:0}
+.yfwrk-pcol:first-child{padding-left:0}
+.yfwrk-pcol:last-child{border-right:0}
+.yfwrk-pcol h5{
+  margin:0 0 .875rem;
+  font-family:var(--typography--family--header,Archivo),sans-serif;
+  font-size:.75rem; font-weight:600; letter-spacing:-.01em;
+  color:var(--brand--dark,#272727)}
+.yfwrk-pcol h5.is-mut{color:var(--text--text-light,#27272780)}
+.yfwrk-pcol-note{
+  font-family:var(--typography--family--meta,"Sometype Mono"),monospace;
+  font-size:.6875rem; line-height:1.5; color:var(--text--text-light,#27272780); padding:.375rem 0}
+
+.yfwrk-opt{
+  display:flex; align-items:center; gap:.625rem; cursor:pointer; user-select:none;
+  padding:.375rem 0;
+  font-family:var(--typography--family--text,Inter),sans-serif;
+  font-size:.875rem; font-weight:500; line-height:1.1;
+  color:var(--text--text-light,#27272780); transition:color .18s ease}
+.yfwrk-opt:hover{color:var(--brand--dark,#272727)}
+.yfwrk-opt-mk{
+  flex:0 0 auto; width:.625rem; height:.625rem; border-radius:50%;
+  border:2px solid var(--dot,var(--text--text-light,#27272780));
+  background:transparent; transition:background-color .2s ease,border-color .2s ease}
+.yfwrk-opt.is-on{color:var(--brand--dark,#272727); font-weight:600}
+.yfwrk-opt.is-on .yfwrk-opt-mk{
+  background:var(--dot,var(--brand--dark,#272727));
+  border-color:var(--dot,var(--brand--dark,#272727))}
+.yfwrk-opt-n{
+  margin-left:auto;
+  font-family:var(--typography--family--meta,"Sometype Mono"),monospace;
+  font-size:.625rem; font-weight:500; color:var(--lines--small-numbers,#27272780)}
+.yfwrk-opt.is-zero{opacity:.35; pointer-events:none}
+
+/* dots read the site's own Solutions variables */
+.yfwrk-opt[data-v="brand"]{--dot:var(--solutions--brand,#ffc62a)}
+.yfwrk-opt[data-v="crossborder"]{--dot:var(--solutions--crossborder,#ef81e8)}
+.yfwrk-opt[data-v="content"]{--dot:var(--solutions--content,#ff5a4d)}
+.yfwrk-opt[data-v="event"]{--dot:var(--solutions--event,#72d95a)}
+.yfwrk-opt[data-v="digital"]{--dot:var(--solutions--digital,#667cff)}
+.yfwrk-opt[data-v="campaign"]{--dot:var(--solutions--campaign,#a65bef)}
+.yfwrk-opt[data-v="operation"]{--dot:var(--solutions--operation,#61dcc7)}
+
+.yfwrk-panel-foot{
+  display:flex; align-items:center; gap:1rem; margin-top:1.125rem;
+  padding-top:.875rem; border-top:1px solid var(--lines--separator,#d9d9d5)}
+.yfwrk-ct{
+  font-family:var(--typography--family--meta,"Sometype Mono"),monospace;
+  font-size:.6875rem; font-weight:500; color:var(--text--text-light,#27272780)}
+.yfwrk-ct b{font-weight:600; color:var(--brand--dark,#272727)}
+.yfwrk-reset{
+  margin-left:auto; cursor:pointer; border:1px solid var(--lines--border,#27272733);
+  background:none; border-radius:30px; padding:.4375rem .875rem;
+  font-family:var(--typography--family--meta,"Sometype Mono"),monospace;
+  font-size:.625rem; font-weight:500; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--brand--dark,#272727);
+  transition:background-color .22s ease,color .22s ease,border-color .22s ease}
+.yfwrk-reset:hover{
+  background:var(--brand--y,#ffee2d); border-color:var(--brand--y,#ffee2d);
+  color:var(--brand--dark,#272727)}
+.yfwrk-scrim{position:fixed; inset:0; z-index:58; display:none}
+.yfwrk-scrim.is-on{display:block}
+
+@media (max-width:991px){
+  .yfwrk-search{max-width:18rem}
+}
+@media (max-width:767px){
+  .yfwrk-search{order:9; flex-basis:100%; max-width:none; margin-top:.5rem}
+  .yfwrk-panel{
+    width:calc(100vw - 1.5rem); border-radius:1.25rem; padding:1.25rem;
+    top:auto; max-height:70vh; overflow-y:auto}
+  .yfwrk-panel-cols{grid-template-columns:1fr; gap:1.25rem}
+  .yfwrk-pcol{padding:0; border-right:0}
+  .yfwrk-pcol:not(:first-child){padding-top:1.25rem; border-top:1px solid var(--lines--separator,#d9d9d5)}
+}`;
+  document.head.appendChild(css);
+
+  var host=document.createElement('div');
+  host.setAttribute('data-yf-injected','');
+  host.innerHTML=
+    '<label class="yfwrk-search" data-worksearch>'+
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'+
+      '<input type="text" id="yfwrk-q" placeholder="Search work" autocomplete="off" aria-label="Search work" />'+
+      '<button class="yfwrk-search-clear" data-searchclear type="button">Clear</button>'+
+    '</label>'+
+    '<div class="yfwrk-scrim" data-workscrim></div>'+
+    '<div class="yfwrk-panel" data-workpanel>'+
+      '<div class="yfwrk-panel-cols">'+
+        '<div class="yfwrk-pcol"><h5 class="is-mut">Location</h5><div data-col="loc"></div></div>'+
+        '<div class="yfwrk-pcol"><h5>Solution</h5><div data-col="sol"></div></div>'+
+        '<div class="yfwrk-pcol"><h5 class="is-mut">Year</h5><div data-col="year"></div></div>'+
+      '</div>'+
+      '<div class="yfwrk-panel-foot">'+
+        '<span class="yfwrk-ct" data-workcount></span>'+
+        '<button class="yfwrk-reset" data-workreset type="button">Reset</button>'+
+      '</div>'+
+    '</div>';
+  while(host.firstChild)document.body.appendChild(host.firstChild);
+
+  /* the search field belongs in the nav row; put it before the links block */
+  var menu=document.querySelector('.zmenu'),
+      search=document.querySelector('[data-worksearch]');
+  if(menu&&search){
+    var block=menu.querySelector('.znavmenublock');
+    if(block){menu.insertBefore(search,block);}else{menu.appendChild(search);}
+  }
+  if(search)search.classList.add('is-live');
+
+  /* derive the facets init() reads */
+  var grid=document.getElementById('work-grid');
+  var list=grid&&grid.querySelector(':scope > .w-dyn-items');
+  if(!list)return;
+  Array.prototype.slice.call(list.children).forEach(function(card){
+    if(!card.classList||!card.classList.contains('w-dyn-item'))return;
+    var y=card.querySelector('[data-year-src]');
+    if(y){
+      var v=(y.textContent||'').replace(/[^0-9]/g,'');
+      if(v)card.setAttribute('data-year',v);
+    }
+    card.querySelectorAll('.yfwrk-cardsols .w-dyn-item').forEach(function(n){
+      var t=(n.textContent||'').trim().toLowerCase();
+      if(t&&!n.getAttribute('data-sol'))n.setAttribute('data-sol',t);
+    });
+  });
+})();
+
 (function(){
 var OVL='.workprojectoverlay,.div-block-162';
 var SHOW_LOC=false; // true once Projects.country is filled (16/78 today)

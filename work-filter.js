@@ -1,8 +1,11 @@
-/* YF - Work page grid + filter  ·  v2.0.1  (2026-10-26, ZF-PC)
+/* YF - Work page grid + filter  ·  v2.1.0  (2026-10-26, ZF-PC)
  * ---------------------------------------------------------------------------
- * Drives yfkk.co/work: the bento grid, the progressive reveal, and the filter -
- * six facets (Solution, Tactic, Industry, Region, Company, Year), search from
- * the nav, live counts, and a breadcrumb row that always says what you see.
+ * Drives yfkk.co/work: the bento grid, the progressive reveal, and the filter.
+ * Interaction is Work Mosaic's (YF Builds): an always-visible SEARCH BAR in the
+ * nav; clicking or typing in it drops a FILTER PANEL with one column per facet
+ * (Solution, Tactic, Industry, Region, Company, Year). Hovering an option
+ * PEEKS: the tiles it would keep get an outline in its colour, the rest dim.
+ * A breadcrumb row under the nav always says what you are looking at.
  *
  * WHY A HOSTED FILE. The Work page's own footer code is capped at 10,000
  * characters and the grid engine alone was at ~9,840. This file has no cap,
@@ -11,29 +14,36 @@
  *
  * WHAT IS IN WEBFLOW, AND WHAT IS IN HERE
  *   Webflow (real Designer elements, real classes, visible on the canvas):
- *     the filter bar, six native Dropdowns, one template option per dropdown,
- *     the breadcrumb row with one template chip, the count, Reset, the view
- *     toggle, and the nav search (Z Nav Bar (mobile), shown on Work only by
- *     the component setting "Show Work search").
+ *     the filter panel (six columns, one template option each, a footer with
+ *     count, Reset and Show results), the breadcrumb row with one template
+ *     chip, the count, Reset, the view toggle, and the nav search bar (Z Nav
+ *     Bar (mobile), shown on Work only by the component setting "Show Work
+ *     search").
  *   Here: behaviour only. States the script toggles (is-on, is-zero, ...) are
  *     styled in the named embed "Work Filter Code (states)" on the Work page.
  *
  * THE DOM CONTRACT - attributes, never class names, so a class rename in the
  * Designer cannot break this file.
  *   #work-grid                         Projects Collection List wrapper
- *   [data-yf-facet="<key>"]            one per facet; key = solution | tactic |
- *                                      industry | region | company | year
- *     [data-yf-facet-n]                 selected-count badge on the toggle
+ *   [data-yf-panel]                    filter panel; .is-open while open
+ *     [data-yf-panel-close]             any number; closes the panel
+ *   [data-yf-facet="<key>"]            one column per facet; key = solution |
+ *                                      tactic | industry | region | company | year
+ *     [data-yf-facet-label]             column heading (used in aria labels)
+ *     [data-yf-facet-n]                 selected-count badge in the heading
  *     [data-yf-template="option"]       option template, cloned per value
  *       [data-yf-opt-label] [data-yf-opt-n] [data-yf-opt-mark]
  *   [data-yf-crumbs]                   breadcrumb row
- *     [data-yf-count-shown] [data-yf-count-total]
+ *   [data-yf-count-shown] [data-yf-count-total]   any number (row + panel)
  *     [data-yf-template="crumb"]        chip template  > [data-yf-crumb-label]
  *     [data-yf-reset]                 (any number: breadcrumb + empty state)
  *   #work-grid[data-yf-empty]          set when nothing matches; the empty-state
  *                                      block (.yfwrk-empty) is shown by CSS
- *   [data-yf-search]                   nav search block (Work page only)
- *     [data-yf-search-toggle] [data-yf-search-input] [data-yf-search-close]
+ *   [data-yf-search]                   nav search bar (Work page only); gets
+ *                                      .is-open with the panel, .has-q with text
+ *     [data-yf-search-input] [data-yf-search-close] (clears the text)
+ *   #work-grid.is-peek                 while an option is hovered; matching
+ *     cards get .is-peek-hit, --yf-peek on the grid = the option's colour
  *
  * WHERE EACH FACET IS READ FROM - the CMS-bound elements already in every card
  * (added for the list view, 2026-10-20/21). Exact text, never a prefix match.
@@ -230,13 +240,25 @@ function init(){
     }
     return '';
   }
+  var canHover=!!(window.matchMedia&&window.matchMedia('(hover:hover) and (pointer:fine)').matches);
+  /* PEEK (Work Mosaic): hovering an option outlines the visible tiles it would
+     keep, in its colour, and dims the rest. Mouse only. */
+  function peek(f,v,acc){
+    wrap.classList.add('is-peek');
+    wrap.style.setProperty('--yf-peek',acc||'var(--brand--dark)');
+    cards.forEach(function(c){c.classList.toggle('is-peek-hit',c._v[f].indexOf(v)!==-1);});
+  }
+  function unpeek(){
+    if(!wrap.classList.contains('is-peek'))return;
+    wrap.classList.remove('is-peek');
+    cards.forEach(function(c){c.classList.remove('is-peek-hit');});
+  }
   document.querySelectorAll('[data-yf-facet]').forEach(function(box){
     var f=box.getAttribute('data-yf-facet');if(FACETS.indexOf(f)===-1)return;
     var tpl=box.querySelector('[data-yf-template="option"]');if(!tpl)return;
     var holder=tpl.parentNode;
-    var toggle=box.querySelector('.w-dropdown-toggle');
     var badge=box.querySelector('[data-yf-facet-n]');
-    var name=txt(toggle&&toggle.querySelector('[data-yf-facet-label]'))||f;
+    var name=txt(box.querySelector('[data-yf-facet-label]'))||f;
     tpl.hidden=true;tpl.setAttribute('aria-hidden','true');
     var opts={};
     optionValues(f).forEach(function(v){
@@ -244,33 +266,34 @@ function init(){
       o.removeAttribute('data-yf-template');o.removeAttribute('aria-hidden');o.hidden=false;
       o.setAttribute('data-yf-value',v);
       if(o.tagName==='BUTTON')o.type='button';
-      o.setAttribute('role','menuitemcheckbox');
       var lab=o.querySelector('[data-yf-opt-label]');if(lab)lab.textContent=v;
       var acc=accentFor(f,v);if(acc)o.style.setProperty('--yf-accent',acc);
+      if(canHover){
+        o.addEventListener('mouseenter',function(){if(!o.classList.contains('is-zero'))peek(f,v,acc);});
+        o.addEventListener('mouseleave',unpeek);
+      }
       o.addEventListener('click',function(e){
         e.preventDefault();e.stopPropagation();
         if(o.getAttribute('aria-disabled')==='true'&&!sel[f][v])return;
         sel[f][v]=!sel[f][v];
         changed(f,v,sel[f][v]?'add':'remove');
+        if(canHover&&o.matches(':hover'))peek(f,v,acc);
       });
       holder.appendChild(o);opts[v]=o;
     });
-    ui[f]={box:box,toggle:toggle,badge:badge,opts:opts,name:name};
-    if(toggle){toggle.setAttribute('aria-haspopup','true');}
+    ui[f]={box:box,badge:badge,opts:opts,name:name};
   });
-  // Webflow's dropdown closes when a LINK inside it is clicked; options are
-  // buttons, so it stays open for picking several. Esc and click-outside are
-  // Webflow's own.
 
   /* ---- breadcrumb ---- */
+  var panel=document.querySelector('[data-yf-panel]');
   var crumbs=document.querySelector('[data-yf-crumbs]');
   var crumbTpl=crumbs&&crumbs.querySelector('[data-yf-template="crumb"]');
   var crumbHolder=crumbTpl&&crumbTpl.parentNode;
   if(crumbTpl){crumbTpl.hidden=true;crumbTpl.setAttribute('aria-hidden','true');}
-  var elShown=crumbs&&crumbs.querySelector('[data-yf-count-shown]');
-  var elTotal=crumbs&&crumbs.querySelector('[data-yf-count-total]');
-  var resetBtns=Array.prototype.slice.call(document.querySelectorAll('[data-yf-reset]'));
-  if(elTotal)elTotal.textContent=pad(cards.length);
+  function all(sel){return Array.prototype.slice.call(document.querySelectorAll(sel));}
+  var elShown=all('[data-yf-count-shown]');
+  var resetBtns=all('[data-yf-reset]');
+  all('[data-yf-count-total]').forEach(function(e){e.textContent=pad(cards.length);});
 
   function addCrumb(label,aria,onRemove){
     if(!crumbTpl)return;
@@ -293,7 +316,7 @@ function init(){
         var count=cards.filter(function(c){return c._v[f].indexOf(v)!==-1&&matches(c,f);}).length;
         var ne=o.querySelector('[data-yf-opt-n]');if(ne)ne.textContent=pad(count);
         o.classList.toggle('is-on',isOn);
-        o.setAttribute('aria-checked',isOn?'true':'false');
+        o.setAttribute('aria-pressed',isOn?'true':'false');
         var zero=count===0&&!isOn;
         o.classList.toggle('is-zero',zero);
         o.setAttribute('aria-disabled',zero?'true':'false');
@@ -309,11 +332,12 @@ function init(){
           addCrumb(v,'Remove '+((ui[f]&&ui[f].name)||f)+': '+v,function(){sel[f][v]=false;changed(f,v,'remove');});
         });
       });
-      if(q)addCrumb('“'+q+'”','Clear search: '+q,function(){setQuery('',true);});
+      if(q)addCrumb('“'+q+'”','Clear search: '+q,function(){setQuery('');});
     }
     var active=anyActive();
     if(crumbs)crumbs.classList.toggle('is-filtered',active);
-    if(elShown)elShown.textContent=pad(matchedCount);
+    if(panel)panel.classList.toggle('is-filtered',active);
+    elShown.forEach(function(e){e.textContent=pad(matchedCount);});
     resetBtns.forEach(function(b){if(b.tagName==='BUTTON')b.disabled=!active;});
   }
 
@@ -349,42 +373,57 @@ function init(){
     renderLimit=INITIAL;relayout();writeURL();scrollToGrid();track(f,v,action);
   }
 
-  /* ---- search (nav) ---- */
+  /* ---- search bar + filter panel (Work Mosaic) ---- */
   var sBox=document.querySelector('[data-yf-search]');
   var sInput=sBox&&sBox.querySelector('[data-yf-search-input]');
-  var sToggle=sBox&&sBox.querySelector('[data-yf-search-toggle]');
   var sClose=sBox&&sBox.querySelector('[data-yf-search-close]');
   var sTimer=0,tTimer=0;
-  function openSearch(open,focus){
-    if(!sBox)return;
-    sBox.classList.toggle('is-open',open);
-    if(sToggle)sToggle.setAttribute('aria-expanded',open?'true':'false');
-    if(open&&focus&&sInput)setTimeout(function(){sInput.focus();},30);
+  function isOpen(){return !!(panel&&panel.classList.contains('is-open'));}
+  function openPanel(open){
+    if(!panel)return;
+    if(isOpen()===open)return;
+    panel.classList.toggle('is-open',open);
+    if(sBox)sBox.classList.toggle('is-open',open);
+    if(sInput)sInput.setAttribute('aria-expanded',open?'true':'false');
+    if(!open)unpeek();
   }
-  function setQuery(v,fromChip){
+  function setQuery(v){
     q=(v||'').trim();
     if(sInput&&sInput.value!==v)sInput.value=v;
     if(sBox)sBox.classList.toggle('has-q',!!q);
     renderLimit=INITIAL;relayout();writeURL();
-    if(fromChip)openSearch(false,false);
     clearTimeout(tTimer);if(q)tTimer=setTimeout(function(){track('search',q,'search');},1200);
+  }
+  if(panel){
+    if(!panel.id)panel.id='yfwrk-panel';
+    all('[data-yf-panel-close]').forEach(function(b){
+      if(b.tagName==='BUTTON')b.type='button';
+      b.addEventListener('click',function(e){e.preventDefault();openPanel(false);scrollToGrid();});
+    });
+    panel.addEventListener('mouseleave',unpeek);
+    // click outside the panel and the search bar closes it (Mosaic's scrim)
+    document.addEventListener('pointerdown',function(e){
+      if(!isOpen())return;
+      if(panel.contains(e.target)||(sBox&&sBox.contains(e.target)))return;
+      openPanel(false);
+    });
+    document.addEventListener('keydown',function(e){
+      if(e.key==='Escape'&&isOpen()){openPanel(false);if(sInput)sInput.focus();}
+    });
   }
   if(sBox&&sInput){
     sBox.classList.add('is-live');
     try{sInput.type='search';}catch(e){}
     sInput.setAttribute('autocomplete','off');sInput.setAttribute('spellcheck','false');
-    var sField=sBox.querySelector('[data-yf-search-field]');
-    if(sField&&!sField.id)sField.id='yfnav-search-field';
-    if(sToggle){sToggle.type='button';sToggle.setAttribute('aria-expanded','false');
-      if(sField)sToggle.setAttribute('aria-controls',sField.id);
-      sToggle.addEventListener('click',function(e){e.preventDefault();openSearch(!sBox.classList.contains('is-open'),true);});}
-    if(sClose){sClose.type='button';sClose.addEventListener('click',function(e){e.preventDefault();if(sInput.value){setQuery('',false);sInput.focus();}else{openSearch(false,false);if(sToggle)sToggle.focus();}});}
-    sInput.addEventListener('input',function(){var v=sInput.value;clearTimeout(sTimer);sTimer=setTimeout(function(){setQuery(v,false);scrollToGrid();},120);});
+    if(panel){sInput.setAttribute('aria-controls',panel.id);sInput.setAttribute('aria-expanded','false');}
+    sBox.addEventListener('click',function(e){if(!sClose||!sClose.contains(e.target)){openPanel(true);if(document.activeElement!==sInput)sInput.focus();}});
+    sInput.addEventListener('focus',function(){openPanel(true);});
+    if(sClose){sClose.type='button';sClose.addEventListener('click',function(e){e.preventDefault();setQuery('');sInput.focus();});}
+    sInput.addEventListener('input',function(){var v=sInput.value;openPanel(true);clearTimeout(sTimer);sTimer=setTimeout(function(){setQuery(v);},120);});
     sInput.addEventListener('keydown',function(e){
-      if(e.key==='Escape'){e.preventDefault();openSearch(false,false);if(sToggle)sToggle.focus();}
-      if(e.key==='Enter'){e.preventDefault();sInput.blur();scrollToGrid();}
+      if(e.key==='Enter'){e.preventDefault();clearTimeout(sTimer);setQuery(sInput.value);openPanel(false);sInput.blur();scrollToGrid();}
     });
-    var f=sInput.closest('form');if(f)f.addEventListener('submit',function(e){e.preventDefault();});
+    var form=sInput.closest('form');if(form)form.addEventListener('submit',function(e){e.preventDefault();});
   }
 
   resetBtns.forEach(function(resetBtn){
@@ -392,18 +431,18 @@ function init(){
     resetBtn.addEventListener('click',function(e){
       e.preventDefault();
       FACETS.forEach(function(f){sel[f]={};});
-      setQuery('',true);track('all','reset','reset');
+      setQuery('');track('all','reset','reset');
     });
   });
 
   readURL();
-  if(q&&sInput){sInput.value=q;openSearch(true,false);}
+  if(q&&sInput){sInput.value=q;sBox.classList.add('has-q');}
   window.addEventListener('resize',function(){computeBatch();relayout();});
   window.addEventListener('load',function(){computeBatch();relayout();});
   computeBatch();
   renderLimit=INITIAL;
   relayout();
-  window.yfWorkFilter={version:'2.0.1',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
+  window.yfWorkFilter={version:'2.1.0',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
 }
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
 })();

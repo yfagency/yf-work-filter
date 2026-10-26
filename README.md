@@ -1,9 +1,11 @@
 # yf-work-filter
 
-The grid and filter behind **yfkk.co/work**: the bento grid, the progressive reveal,
-six filters (Solution, Tactic, Industry, Region, Company, Year), search from the nav,
-live counts, a breadcrumb row that always says what you are looking at, and an empty
-state with its own reset.
+The grid and filter behind **yfkk.co/work**: the bento grid, the progressive reveal, and
+a filter that works like **Work Mosaic** (YF Builds): an always-visible search bar in the
+nav; clicking or typing in it drops a panel with one column per facet (Solution, Tactic,
+Industry, Region, Company, Year) with live counts; hovering an option outlines the tiles
+it would keep, in its colour, and dims the rest. A breadcrumb row under the nav always
+says what you are looking at, and an empty state has its own reset.
 
 One file, no dependencies, no build step: `work-filter.js`.
 
@@ -14,7 +16,7 @@ rejects `<script>` from the API. The script is past the cap and its comments are
 record of several hard-won fixes. Hosting it here removes the cap, puts it in version
 control, and makes changes reviewable as diffs.
 
-## How it is wired (v2)
+## How it is wired (v2.1)
 
 Everything you can see is a native Webflow element with a real class bound to variables,
 so the Designer canvas matches the live page. The script only reads, clones and toggles.
@@ -22,12 +24,13 @@ so the Designer canvas matches the live page. The script only reads, clones and 
 | Piece | Where it lives |
 |---|---|
 | `work-filter.js` | this repo → jsDelivr (pinned to a **commit SHA**) → registered hosted script `yf_work_filter`, Work page footer |
-| Filter bar, dropdowns, breadcrumb row, empty state | Native elements on the Work page (`yfwrk-f*`, `yfwrk-crumb*`, `yfwrk-reset*`, `yfwrk-empty`) |
-| Nav search | Native block inside **Z Nav Bar (mobile)**, shown only where the instance prop **Show Work search** is on (Work page only) |
-| States CSS (open, selected, dimmed, hover, focus, empty, phone tweaks) | HTML Embed on the Work page, named "Work Filter Code (states: …)" |
+| Filter panel, breadcrumb row, empty state | Native elements in the Work Filter Bar on the Work page (`yfwrk-panel*`, `yfwrk-fopt*`, `yfwrk-crumb*`, `yfwrk-reset*`, `yfwrk-empty`). The panel is `display:none` until opened, like a Dropdown list. |
+| Nav search bar | Native block inside **Z Nav Bar (mobile)**, right after the logo, shown only where the instance prop **Show Work search** is on (Work page only). Desktop: a bar up to 28rem. Tablet (768–991): the nav links leave no room, so it rests as a round pill and widens over the links while open. Phone: fills the space between logo and menu. |
+| Hovers | Native hover states on `yfwrk-fopt`, `yfwrk-panel-close`, `yfnav-search-field` |
+| States CSS (panel open, option on/dimmed, peek, has text, empty, focus, tablet search) | HTML Embed on the Work page, named "Work Filter Code (states: …)" |
 | Facet data | The CMS-bound elements already inside every card (added for the list view) |
 
-The old inline footer script and the v1 nav embed are gone.
+The old inline footer script, the v1 nav embed and the v2.0 dropdown pills are gone.
 
 ## Webflow references
 
@@ -41,17 +44,20 @@ The old inline footer script and the v1 nav embed are gone.
 
 ```
 #work-grid > .w-dyn-items > .w-dyn-item          one card per project
-[data-workfilter]                                 the filter bar
-  [data-yf-facet="solution|tactic|industry|region|company|year"]
-    [data-yf-facet-n]                             selected-count badge on the toggle
-    [data-yf-template="option"]                   cloned once per value
-      [data-yf-opt-label] [data-yf-opt-n] [data-yf-opt-mark]
+[data-workfilter]                                 the filter bar (position: relative)
+  [data-yf-panel]                                 filter panel; .is-open while open
+    [data-yf-facet="solution|tactic|industry|region|company|year"]   one column each
+      [data-yf-facet-label] [data-yf-facet-n]     heading + selected-count badge
+      [data-yf-template="option"]                 cloned once per value
+        [data-yf-opt-label] [data-yf-opt-n] [data-yf-opt-mark]
+    [data-yf-panel-close]                         "Show results"
   [data-yf-crumbs]                                breadcrumb row
-    [data-yf-count-shown] [data-yf-count-sep] [data-yf-count-total]
     [data-yf-template="crumb"] > [data-yf-crumb-label]
-[data-yf-reset]                                   any number (breadcrumb + empty state)
-[data-yf-search]                                  nav search (one only)
-  [data-yf-search-toggle] [data-yf-search-field] [data-yf-search-input] [data-yf-search-close]
+[data-yf-count-shown] [data-yf-count-sep] [data-yf-count-total]   any number
+[data-yf-reset]                                   any number (panel, breadcrumb, empty state)
+[data-yf-search]                                  nav search bar (one only)
+  [data-yf-search-input] [data-yf-search-close]   close = clear the text
+#work-grid.is-peek / .is-peek-hit                 while an option is hovered
 #work-grid[data-yf-empty]                         set by the script when nothing matches;
                                                   CSS shows the following .yfwrk-empty
 ```
@@ -82,6 +88,9 @@ with no readable facet never matches that filter.
 - State lives in the URL: `?solution=Brand&year=2025&q=…`, so filtered views can be shared.
 - Every change sends a GA4 `filter_apply` event (`filter_facet`, `filter_value`,
   `filter_action`, `results`).
+- The panel opens on a click or focus in the search bar and on typing; it closes on
+  Show results, Esc, Enter in the search, or a click anywhere outside it and the bar.
+- Peek is mouse only (`hover:hover` and a fine pointer); touch devices skip it.
 - `window.yfWorkFilter` exposes `version`, `state()` and `count()` for debugging.
 
 ## Traps
@@ -104,20 +113,23 @@ pin jsDelivr to the **full commit SHA** (immutable, so the SRI stays valid forev
    and check it against what jsDelivr serves for that SHA.
 4. In Webflow, register a new version of `yf_work_filter` with the new URL and hash, and
    apply that version to the Work page footer.
-5. Publish to **staging** and check: counts, dropdowns, breadcrumb, reset, search, URL
-   reload, list view, empty state, 375px and 768px, console.
+5. Publish to **staging** and check: search bar opens the panel, counts, peek on hover,
+   breadcrumb, reset, URL reload, list view, empty state, 375px and 768px, console.
 
 If the hash doesn't match the served bytes the browser refuses the script and the filter
 silently doesn't load.
 
 ## Current version
 
-- `v2.0.1` — commit `73b8a93116a173385e962dad6ddb13608321e138`
-- SRI: `sha384-iniqliIAXiA5oy4qvLXG82Ra7JvWJ4jO5dAyVT/+SZQXlBoNWfEGo3pPOZaYYnDx`
-- `https://cdn.jsdelivr.net/gh/yfagency/yf-work-filter@73b8a93116a173385e962dad6ddb13608321e138/work-filter.js`
+- `v2.1.0` — commit `7db5950a46c46552eb4a47d6c0436f9e369ae0db`
+- SRI: `sha384-DwvguKjzTNoIG+hmsavww9C7U9SjOMfmwukukRRFnRHkZJh5MP/oP+A3QDMKghv7`
+- `https://cdn.jsdelivr.net/gh/yfagency/yf-work-filter@7db5950a46c46552eb4a47d6c0436f9e369ae0db/work-filter.js`
 
 ## History
 
+- v2.1.0 (2026-10-26) — Work Mosaic interaction: nav search bar opens a six-column filter
+  panel; option hover peeks the matching tiles. Replaces the v2.0 dropdown pills (Z: "search
+  bar, not drop down pills").
 - v2.0.1 (2026-10-26) — every `[data-yf-reset]` is bound (breadcrumb + empty state).
 - v2.0.0 (2026-10-26) — six facets, native Webflow UI, nav search, breadcrumb, URL state,
   GA4; grid engine moved here from the Work page footer.

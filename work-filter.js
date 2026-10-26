@@ -1,4 +1,4 @@
-/* YF - Work page grid + filter  ·  v2.1.0  (2026-10-26, ZF-PC)
+/* YF - Work page grid + filter  ·  v2.1.1  (2026-10-26, ZF-PC)
  * ---------------------------------------------------------------------------
  * Drives yfkk.co/work: the bento grid, the progressive reveal, and the filter.
  * Interaction is Work Mosaic's (YF Builds): an always-visible SEARCH BAR in the
@@ -377,6 +377,8 @@ function init(){
   var sBox=document.querySelector('[data-yf-search]');
   var sInput=sBox&&sBox.querySelector('[data-yf-search-input]');
   var sClose=sBox&&sBox.querySelector('[data-yf-search-close]');
+  // the clickable zone is the visible field; the wrapper can be wider (it fills spare nav space)
+  var sZone=(sBox&&sBox.querySelector('[data-yf-search-field]'))||sBox;
   var sTimer=0,tTimer=0;
   function isOpen(){return !!(panel&&panel.classList.contains('is-open'));}
   function openPanel(open){
@@ -404,7 +406,7 @@ function init(){
     // click outside the panel and the search bar closes it (Mosaic's scrim)
     document.addEventListener('pointerdown',function(e){
       if(!isOpen())return;
-      if(panel.contains(e.target)||(sBox&&sBox.contains(e.target)))return;
+      if(panel.contains(e.target)||(sZone&&sZone.contains(e.target)))return;
       openPanel(false);
     });
     document.addEventListener('keydown',function(e){
@@ -416,7 +418,7 @@ function init(){
     try{sInput.type='search';}catch(e){}
     sInput.setAttribute('autocomplete','off');sInput.setAttribute('spellcheck','false');
     if(panel){sInput.setAttribute('aria-controls',panel.id);sInput.setAttribute('aria-expanded','false');}
-    sBox.addEventListener('click',function(e){if(!sClose||!sClose.contains(e.target)){openPanel(true);if(document.activeElement!==sInput)sInput.focus();}});
+    sZone.addEventListener('click',function(e){if(!sClose||!sClose.contains(e.target)){openPanel(true);if(document.activeElement!==sInput)sInput.focus();}});
     sInput.addEventListener('focus',function(){openPanel(true);});
     if(sClose){sClose.type='button';sClose.addEventListener('click',function(e){e.preventDefault();setQuery('');sInput.focus();});}
     sInput.addEventListener('input',function(){var v=sInput.value;openPanel(true);clearTimeout(sTimer);sTimer=setTimeout(function(){setQuery(v);},120);});
@@ -442,7 +444,7 @@ function init(){
   computeBatch();
   renderLimit=INITIAL;
   relayout();
-  window.yfWorkFilter={version:'2.1.0',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
+  window.yfWorkFilter={version:'2.1.1',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
 }
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
 })();

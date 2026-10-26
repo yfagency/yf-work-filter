@@ -121,7 +121,7 @@ silently doesn't load.
 
 ## Current version
 
-- `v2.1.0` — commit `7db5950a46c46552eb4a47d6c0436f9e369ae0db`
+- `v2.1.1` — see git log for the commit
 - SRI: `sha384-DwvguKjzTNoIG+hmsavww9C7U9SjOMfmwukukRRFnRHkZJh5MP/oP+A3QDMKghv7`
 - `https://cdn.jsdelivr.net/gh/yfagency/yf-work-filter@7db5950a46c46552eb4a47d6c0436f9e369ae0db/work-filter.js`
 

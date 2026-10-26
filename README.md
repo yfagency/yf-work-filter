@@ -1,7 +1,8 @@
 # yf-work-filter
 
-The search and filter behaviour behind **yfkk.co/work** — the bento grid, the
-progressive reveal, and the search / Solution / Year filter that lives in the nav bar.
+The grid and filter behind **yfkk.co/work**: the bento grid, the progressive reveal,
+six filters (Solution, Tactic, Industry, Region, Company, Year), search from the nav,
+live counts, and a breadcrumb row that always says what you are looking at.
 
 One file, no dependencies, no build step: `work-filter.js`.
 

@@ -1,224 +1,70 @@
-/* YF - Work page grid + nav filter  ·  v1.1.0
+/* YF - Work page grid + filter  ·  v2.0.0  (2026-10-26, ZF-PC)
  * ---------------------------------------------------------------------------
- * Drives #work-grid on yfkk.co/work: the bento layout, the progressive reveal
- * and the search / Solution / Year filter that sits in the nav bar.
+ * Drives yfkk.co/work: the bento grid, the progressive reveal, and the filter -
+ * six facets (Solution, Tactic, Industry, Region, Company, Year), search from
+ * the nav, live counts, and a breadcrumb row that always says what you see.
  *
- * SELF-CONTAINED as of v1.1.0. This one file carries its own CSS and its own
- * markup and installs them at runtime, so the Work page needs no custom code
- * at all - it is attached as a registered hosted script and nothing else.
- * That is not a style preference: Webflow's Data API returns HTTP 406 for any
- * write to page freeform code on this site, so page code cannot be authored
- * programmatically. Registered scripts are the one writable path.
+ * WHY A HOSTED FILE. The Work page's own footer code is capped at 10,000
+ * characters and the grid engine alone was at ~9,840. This file has no cap,
+ * lives in version control, and is attached to the page as the registered
+ * script "YF Work Filter". Deploy steps: README.
  *
- * It also means install and rollback are single operations:
- *   install  - register the script, attach it to the Work page
- *   rollback - remove_page_script, and switch .SolutionNav visibility back on
- * The page Head/Footer code and the Z Nav Bar component are never touched.
+ * WHAT IS IN WEBFLOW, AND WHAT IS IN HERE
+ *   Webflow (real Designer elements, real classes, visible on the canvas):
+ *     the filter bar, six native Dropdowns, one template option per dropdown,
+ *     the breadcrumb row with one template chip, the count, Reset, the view
+ *     toggle, and the nav search (Z Nav Bar (mobile), shown on Work only by
+ *     the component setting "Show Work search").
+ *   Here: behaviour only. States the script toggles (is-on, is-zero, ...) are
+ *     styled in the named embed "Work Filter Code (states)" on the Work page.
  *
- * WHAT IT EXPECTS FROM THE PAGE
- *   #work-grid                        the Projects Collection List wrapper
- *   .projecttitle                     project name, per card (searched)
- *   .yfwrk-cardsols .w-dyn-item       nested Solutions items; text = the name
- *   [data-year-src]                   OPTIONAL per-card element whose text is
- *                                     the year. Without it the Year column
- *                                     hides itself and everything else works.
- *   .zmenu / .znavmenublock           the nav row the search field moves into
+ * THE DOM CONTRACT - attributes, never class names, so a class rename in the
+ * Designer cannot break this file.
+ *   #work-grid                         Projects Collection List wrapper
+ *   [data-yf-facet="<key>"]            one per facet; key = solution | tactic |
+ *                                      industry | region | company | year
+ *     [data-yf-facet-n]                 selected-count badge on the toggle
+ *     [data-yf-template="option"]       option template, cloned per value
+ *       [data-yf-opt-label] [data-yf-opt-n] [data-yf-opt-mark]
+ *   [data-yf-crumbs]                   breadcrumb row
+ *     [data-yf-count-shown] [data-yf-count-total]
+ *     [data-yf-template="crumb"]        chip template  > [data-yf-crumb-label]
+ *     [data-yf-reset]
+ *   [data-yf-search]                   nav search block (Work page only)
+ *     [data-yf-search-toggle] [data-yf-search-input] [data-yf-search-close]
  *
- * Facets are derived from rendered text because the Data API rejects attribute
- * value bindings outright. lowercase(solution name) === its slug for all seven
- * solutions, so the solution match is exact rather than the prefix guess the
- * previous inline script used.
+ * WHERE EACH FACET IS READ FROM - the CMS-bound elements already in every card
+ * (added for the list view, 2026-10-20/21). Exact text, never a prefix match.
+ *   solution  .yfwrk-cardsols .yfwrk-sol-label   (Solutions list ONLY - the old
+ *             script read every nested list, so the tactic "Brand Website"
+ *             counted as Brand: Brand read 17, true 15)
+ *   tactic    .yfwrk-cardtacs .yfsolp-chip-label  (dot = closest [data-accent])
+ *   industry  .yfwrk-rowindustry     region  .yfwrk-rowflag[alt]
+ *   company   .yfwrk-rowclient       year    .yfwrk-rowyear
+ *   TRAP: nested multi-reference lists render at most FIVE items. A project
+ *   with six tactics silently drops one from the Tactic filter.
  *
- * Rationale for the non-obvious parts: Notion > Claude Knowledge Base >
- * Decisions & Learnings (2026-08-03 empty-cell fix, 2026-08-31 rewrite,
- * 2026-09-01 self-contained v1.1.0).
+ * SEMANTICS (ported from Work Mosaic): any match within a facet, every facet
+ * must match. An option's count ignores its own facet, so it says what
+ * clicking it would give you. Options that would give nothing are dimmed.
+ * Selections are mirrored to the URL (?solution=Brand&year=2025&q=tdk) so a
+ * filtered view can be shared. Each change sends GA4 `filter_apply`.
  * ------------------------------------------------------------------------- */
-
-/* ---- v1.1.0 self-install: CSS, markup, nav placement, facet derivation ----
-   Runs before init(). Everything it creates is marked data-yf-injected so a
-   future version can find and replace it. */
 (function(){
-  if(document.getElementById('yfwrk-css'))return;
-  if(!document.getElementById('work-grid'))return;   /* Work page only */
-
-  var css=document.createElement('style');
-  css.id='yfwrk-css';
-  css.textContent=`/* hidden per-card Year source (see YEAR STEP above) */
-#work-grid [data-year-src]{display:none !important}
-/* Year column hides itself until a year source exists */
-.yfwrk-pcol:has([data-col="year"]:empty){display:none}
-
-/* search field - moved into the nav by the script below */
-.yfwrk-search{
-  display:none; flex:1 1 auto; max-width:26rem; align-items:center; gap:.5rem;
-  border-bottom:1px solid var(--lines--border,#27272733);
-  padding:.4375rem .25rem; cursor:text; min-width:0;
-  transition:border-color .22s ease}
-.yfwrk-search.is-live{display:flex}
-.yfwrk-search:focus-within{border-bottom-color:var(--brand--dark,#272727)}
-.yfwrk-search svg{flex:0 0 auto; display:block; opacity:.45}
-.yfwrk-search input{
-  border:0; outline:0; background:none; width:100%; min-width:0; padding:0;
-  font-family:var(--typography--family--text,Inter),sans-serif;
-  font-size:.9375rem; font-weight:400; line-height:1;
-  color:var(--brand--dark,#272727)}
-.yfwrk-search input::placeholder{color:var(--text--text-light,#27272780)}
-.yfwrk-search-clear{
-  flex:0 0 auto; border:0; background:none; cursor:pointer; padding:.125rem .25rem;
-  font-family:var(--typography--family--meta,"Sometype Mono"),monospace;
-  font-size:.625rem; font-weight:500; letter-spacing:.1em; text-transform:uppercase;
-  color:var(--text--text-light,#27272780);
-  opacity:0; pointer-events:none; transition:opacity .18s ease}
-.yfwrk-search-clear.is-on{opacity:1; pointer-events:auto}
-.yfwrk-search-clear:hover{color:var(--brand--dark,#272727)}
-
-/* ---- panel: drops from the nav ---- */
-.yfwrk-panel{
-  position:fixed; top:4.75rem; left:50%;
-  transform:translateX(-50%) translateY(-.5rem); z-index:59;
-  width:min(80rem,calc(100vw - 2.5rem));
-  background:var(--backgrounds--pure-white,#fff);
-  border-radius:0 0 1.25rem 1.25rem;
-  box-shadow:0 1.5rem 3.75rem rgba(39,39,39,.14);
-  padding:1.75rem 1.625rem 1.375rem;
-  opacity:0; pointer-events:none; transition:opacity .22s ease,transform .22s ease}
-@supports (padding-top:env(safe-area-inset-top)){
- .yfwrk-panel{top:calc(4.75rem + env(safe-area-inset-top,0px))}}
-.yfwrk-panel.is-open{opacity:1; pointer-events:auto; transform:translateX(-50%)}
-.yfwrk-panel-cols{display:grid; grid-template-columns:1fr 1fr 1fr}
-.yfwrk-pcol{padding:0 1.375rem; border-right:1px solid var(--lines--separator,#d9d9d5); min-width:0}
-.yfwrk-pcol:first-child{padding-left:0}
-.yfwrk-pcol:last-child{border-right:0}
-.yfwrk-pcol h5{
-  margin:0 0 .875rem;
-  font-family:var(--typography--family--header,Archivo),sans-serif;
-  font-size:.75rem; font-weight:600; letter-spacing:-.01em;
-  color:var(--brand--dark,#272727)}
-.yfwrk-pcol h5.is-mut{color:var(--text--text-light,#27272780)}
-.yfwrk-pcol-note{
-  font-family:var(--typography--family--meta,"Sometype Mono"),monospace;
-  font-size:.6875rem; line-height:1.5; color:var(--text--text-light,#27272780); padding:.375rem 0}
-
-.yfwrk-opt{
-  display:flex; align-items:center; gap:.625rem; cursor:pointer; user-select:none;
-  padding:.375rem 0;
-  font-family:var(--typography--family--text,Inter),sans-serif;
-  font-size:.875rem; font-weight:500; line-height:1.1;
-  color:var(--text--text-light,#27272780); transition:color .18s ease}
-.yfwrk-opt:hover{color:var(--brand--dark,#272727)}
-.yfwrk-opt-mk{
-  flex:0 0 auto; width:.625rem; height:.625rem; border-radius:50%;
-  border:2px solid var(--dot,var(--text--text-light,#27272780));
-  background:transparent; transition:background-color .2s ease,border-color .2s ease}
-.yfwrk-opt.is-on{color:var(--brand--dark,#272727); font-weight:600}
-.yfwrk-opt.is-on .yfwrk-opt-mk{
-  background:var(--dot,var(--brand--dark,#272727));
-  border-color:var(--dot,var(--brand--dark,#272727))}
-.yfwrk-opt-n{
-  margin-left:auto;
-  font-family:var(--typography--family--meta,"Sometype Mono"),monospace;
-  font-size:.625rem; font-weight:500; color:var(--lines--small-numbers,#27272780)}
-.yfwrk-opt.is-zero{opacity:.35; pointer-events:none}
-
-/* dots read the site's own Solutions variables */
-.yfwrk-opt[data-v="brand"]{--dot:var(--solutions--brand,#ffc62a)}
-.yfwrk-opt[data-v="crossborder"]{--dot:var(--solutions--crossborder,#ef81e8)}
-.yfwrk-opt[data-v="content"]{--dot:var(--solutions--content,#ff5a4d)}
-.yfwrk-opt[data-v="event"]{--dot:var(--solutions--event,#72d95a)}
-.yfwrk-opt[data-v="digital"]{--dot:var(--solutions--digital,#667cff)}
-.yfwrk-opt[data-v="campaign"]{--dot:var(--solutions--campaign,#a65bef)}
-.yfwrk-opt[data-v="operation"]{--dot:var(--solutions--operation,#61dcc7)}
-
-.yfwrk-panel-foot{
-  display:flex; align-items:center; gap:1rem; margin-top:1.125rem;
-  padding-top:.875rem; border-top:1px solid var(--lines--separator,#d9d9d5)}
-.yfwrk-ct{
-  font-family:var(--typography--family--meta,"Sometype Mono"),monospace;
-  font-size:.6875rem; font-weight:500; color:var(--text--text-light,#27272780)}
-.yfwrk-ct b{font-weight:600; color:var(--brand--dark,#272727)}
-.yfwrk-reset{
-  margin-left:auto; cursor:pointer; border:1px solid var(--lines--border,#27272733);
-  background:none; border-radius:30px; padding:.4375rem .875rem;
-  font-family:var(--typography--family--meta,"Sometype Mono"),monospace;
-  font-size:.625rem; font-weight:500; letter-spacing:.1em; text-transform:uppercase;
-  color:var(--brand--dark,#272727);
-  transition:background-color .22s ease,color .22s ease,border-color .22s ease}
-.yfwrk-reset:hover{
-  background:var(--brand--y,#ffee2d); border-color:var(--brand--y,#ffee2d);
-  color:var(--brand--dark,#272727)}
-.yfwrk-scrim{position:fixed; inset:0; z-index:58; display:none}
-.yfwrk-scrim.is-on{display:block}
-
-@media (max-width:991px){
-  .yfwrk-search{max-width:18rem}
-}
-@media (max-width:767px){
-  .yfwrk-search{order:9; flex-basis:100%; max-width:none; margin-top:.5rem}
-  .yfwrk-panel{
-    width:calc(100vw - 1.5rem); border-radius:1.25rem; padding:1.25rem;
-    top:auto; max-height:70vh; overflow-y:auto}
-  .yfwrk-panel-cols{grid-template-columns:1fr; gap:1.25rem}
-  .yfwrk-pcol{padding:0; border-right:0}
-  .yfwrk-pcol:not(:first-child){padding-top:1.25rem; border-top:1px solid var(--lines--separator,#d9d9d5)}
-}`;
-  document.head.appendChild(css);
-
-  var host=document.createElement('div');
-  host.setAttribute('data-yf-injected','');
-  host.innerHTML=
-    '<label class="yfwrk-search" data-worksearch>'+
-      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'+
-      '<input type="text" id="yfwrk-q" placeholder="Search work" autocomplete="off" aria-label="Search work" />'+
-      '<button class="yfwrk-search-clear" data-searchclear type="button">Clear</button>'+
-    '</label>'+
-    '<div class="yfwrk-scrim" data-workscrim></div>'+
-    '<div class="yfwrk-panel" data-workpanel>'+
-      '<div class="yfwrk-panel-cols">'+
-        '<div class="yfwrk-pcol"><h5 class="is-mut">Location</h5><div data-col="loc"></div></div>'+
-        '<div class="yfwrk-pcol"><h5>Solution</h5><div data-col="sol"></div></div>'+
-        '<div class="yfwrk-pcol"><h5 class="is-mut">Year</h5><div data-col="year"></div></div>'+
-      '</div>'+
-      '<div class="yfwrk-panel-foot">'+
-        '<span class="yfwrk-ct" data-workcount></span>'+
-        '<button class="yfwrk-reset" data-workreset type="button">Reset</button>'+
-      '</div>'+
-    '</div>';
-  while(host.firstChild)document.body.appendChild(host.firstChild);
-
-  /* the search field belongs in the nav row; put it before the links block */
-  var menu=document.querySelector('.zmenu'),
-      search=document.querySelector('[data-worksearch]');
-  if(menu&&search){
-    var block=menu.querySelector('.znavmenublock');
-    if(block){menu.insertBefore(search,block);}else{menu.appendChild(search);}
-  }
-  if(search)search.classList.add('is-live');
-
-  /* derive the facets init() reads */
-  var grid=document.getElementById('work-grid');
-  var list=grid&&grid.querySelector(':scope > .w-dyn-items');
-  if(!list)return;
-  Array.prototype.slice.call(list.children).forEach(function(card){
-    if(!card.classList||!card.classList.contains('w-dyn-item'))return;
-    var y=card.querySelector('[data-year-src]');
-    if(y){
-      var v=(y.textContent||'').replace(/[^0-9]/g,'');
-      if(v)card.setAttribute('data-year',v);
-    }
-    card.querySelectorAll('.yfwrk-cardsols .w-dyn-item').forEach(function(n){
-      var t=(n.textContent||'').trim().toLowerCase();
-      if(t&&!n.getAttribute('data-sol'))n.setAttribute('data-sol',t);
-    });
-  });
-})();
-
-(function(){
+'use strict';
 var OVL='.workprojectoverlay,.div-block-162';
-var SHOW_LOC=false; // true once Projects.country is filled (16/78 today)
-function getCols(){return (window.innerWidth||1200)<=767?3:6;}
-// order = Solutions `order`; label = slug capitalised (matches all 7 CMS names)
-var SOLS='brand crossborder content event digital campaign operation'.split(' ');
-function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+var FACETS=['solution','tactic','industry','region','company','year'];
+// KB canonical domain order (Critical Context 01).
+var SOL_ORDER=['brand','content','event','campaign','digital','operation','crossborder'];
+
+/* ---- grid engine (moved verbatim in behaviour from the Work page footer) ---- */
+// COLUMNS - single source of truth. layout() and computeBatch() MUST agree or
+// the progressive reveal renders the wrong tile count and leaves holes.
+// 768-991 = 4 (2026-09-04), desktop = 5 (2026-10-20, same as About team grid).
+function getCols(){var w=(window.innerWidth||1200);if(w<=767)return 3;if(w<=991)return 4;return 5;}
+function txt(el){return el?(el.textContent||'').replace(/\s+/g,' ').trim():'';}
+function norm(s){return (s||'').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'');}
+
 function init(){
   var wrap=document.getElementById('work-grid');
   if(!wrap)return;
@@ -228,25 +74,23 @@ function init(){
   function topCards(){return Array.prototype.slice.call(list.children).filter(function(el){return el.classList&&el.classList.contains('w-dyn-item');});}
   var cards=topCards();
   if(!cards.length)return;
-  /* Facets come from CMS-bound attributes, not scraped text. data-year is on
-     the Collection Item; data-sol is on each nested Solutions item and holds
-     the SLUG, so matching is exact - the old code compared display name to
-     slug with a prefix test and treated operation/operations as equal.
 
-     Keep the nested Solutions collection limit at 100. The 3-chip cap on the
-     Work page is display:none, and querySelectorAll still finds hidden
-     elements - capping the collection would silently drop solutions four and
-     up from the filter and desynchronise the counts against the tiles. */
+  /* facets per card */
   cards.forEach(function(card){
-    card._sols=Array.prototype.slice.call(card.querySelectorAll('[data-sol]')).map(function(n){return (n.getAttribute('data-sol')||'').trim().toLowerCase();}).filter(Boolean);
-    card._year=(card.getAttribute('data-year')||'').trim();
-    card._loc=(card.getAttribute('data-country')||'').trim().toLowerCase();
-    var t=card.querySelector('.projecttitle');
-    card._title=((t&&t.textContent)||'').trim().toLowerCase();
+    var v={};FACETS.forEach(function(f){v[f]=[];});
+    card.querySelectorAll('.yfwrk-cardsols .yfwrk-sol-label').forEach(function(n){var t=txt(n);if(t)v.solution.push(t);});
+    card.querySelectorAll('.yfwrk-cardtacs .yfsolp-chip-label').forEach(function(n){var t=txt(n);if(t)v.tactic.push(t);});
+    var ind=txt(card.querySelector('.yfwrk-rowindustry'));if(ind)v.industry.push(ind);
+    var fl=card.querySelector('.yfwrk-rowflag');var reg=fl?(fl.getAttribute('alt')||'').trim():'';if(reg)v.region.push(reg);
+    var co=txt(card.querySelector('.yfwrk-rowclient'));if(co)v.company.push(co);
+    var yr=txt(card.querySelector('.yfwrk-rowyear'));if(/^\d{4}$/.test(yr))v.year.push(yr);
+    card._v=v;
+    card._hay=norm([txt(card.querySelector('.projecttitle'))].concat(v.solution,v.tactic,v.industry,v.region,v.company,v.year).join(' '));
+  });
+  cards.forEach(function(card){
     card.querySelectorAll('img').forEach(function(img){try{img.loading='lazy';img.decoding='async';}catch(e){}});
   });
-  /* directional hover: the overlay slides out toward the edge the pointer
-     left by, so exit mirrors entry rather than always going one way. */
+  /* directional hover */
   cards.forEach(function(card){
     var overlay=card.querySelector(OVL);
     if(!overlay)return;
@@ -255,107 +99,23 @@ function init(){
     card.addEventListener('mouseenter',function(e){overlay.style.transition='transform 0.45s cubic-bezier(0.4,0,0.2,1)';overlay.style.transform=toT(getDir(e));});
     card.addEventListener('mouseleave',function(e){var t=toT(getDir(e));overlay.style.transition='none';overlay.style.transform=t;requestAnimationFrame(function(){requestAnimationFrame(function(){overlay.style.transition='transform 0.45s cubic-bezier(0.4,0,0.2,1)';overlay.style.transform='translate(0,0)';});});});
   });
-  // shuffle per load; re-read so array matches DOM
+  // Random shuffle once per load (Fisher-Yates); cards re-read after so the
+  // array matches the DOM.
   if(cards.length>1){
     for(var s=cards.length-1;s>0;s--){var r=Math.floor(Math.random()*(s+1));var tmp=cards[s];cards[s]=cards[r];cards[r]=tmp;}
     cards.forEach(function(el){list.appendChild(el);});
     cards=topCards();
   }
-  /* OR inside a category, AND across categories */
-  var sel={sol:{},loc:{},year:{}},query='';
-  function on(k){return Object.keys(sel[k]).filter(function(x){return sel[k][x];});}
-  function hit(c,k,vals){
-    if(k==='sol')return c._sols.some(function(s){return vals.indexOf(s)!==-1;});
-    if(k==='loc')return vals.indexOf(c._loc)!==-1;
-    return vals.indexOf(c._year)!==-1;
-  }
-  function match(c){
-    if(query&&c._title.indexOf(query)===-1)return false;
-    var ks=['sol','loc','year'];
-    for(var i=0;i<ks.length;i++){var v=on(ks[i]);if(v.length&&!hit(c,ks[i],v))return false;}
-    return true;
-  }
-  // a count ignores its own category: what clicking would give
-  function countFor(k,val){
-    return cards.filter(function(c){
-      if(query&&c._title.indexOf(query)===-1)return false;
-      var ks=['sol','loc','year'];
-      for(var i=0;i<ks.length;i++){if(ks[i]===k)continue;var v=on(ks[i]);if(v.length&&!hit(c,ks[i],v))return false;}
-      return hit(c,k,[val]);
-    }).length;
-  }
-  var panel=document.querySelector('[data-workpanel]'),
-      scrim=document.querySelector('[data-workscrim]'),
-      input=document.getElementById('yfwrk-q'),
-      clr=document.querySelector('[data-searchclear]'),
-      ct=document.querySelector('[data-workcount]');
-  // Reparent to <body>. The embed ships them inside .ZNavBar, whose stacking
-  // context would put the scrim OVER the search field and the nav links -
-  // once open, the input and Clear became unclickable. At body level the
-  // ladder is nav 60 > panel 59 > scrim 58, as in the prototype.
-  if(panel&&panel.parentNode!==document.body)document.body.appendChild(panel);
-  if(scrim&&scrim.parentNode!==document.body)document.body.appendChild(scrim);
-  var YEARS=cards.map(function(c){return c._year;}).filter(Boolean).filter(function(y,i,a){return a.indexOf(y)===i;}).sort(function(a,b){return Number(b)-Number(a);});
-  var LOCS=cards.map(function(c){return c._loc;}).filter(Boolean).filter(function(l,i,a){return a.indexOf(l)===i;}).sort();
-  function renderCol(k,opts){
-    var box=document.querySelector('[data-col="'+k+'"]');
-    if(!box)return;
-    box.innerHTML='';
-    if(k==='loc'&&!SHOW_LOC){box.innerHTML='<div class="yfwrk-pcol-note">Not yet available</div>';return;}
-    opts.forEach(function(o){
-      var n=countFor(k,o[0]),act=!!sel[k][o[0]];
-      var d=document.createElement('div');
-      d.className='yfwrk-opt'+(act?' is-on':'')+((n===0&&!act)?' is-zero':'');
-      d.setAttribute('data-v',o[0]);
-      d.innerHTML='<span class="yfwrk-opt-mk"></span><span>'+o[1]+'</span><span class="yfwrk-opt-n">'+(n<10?'0'+n:n)+'</span>';
-      d.addEventListener('click',function(){sel[k][o[0]]=!sel[k][o[0]];cols();apply();});
-      box.appendChild(d);
-    });
-  }
-  function cols(){
-    renderCol('sol',SOLS.map(function(x){return [x,cap(x)];}));
-    renderCol('year',YEARS.map(function(y){return [y,y];}));
-    renderCol('loc',LOCS.map(function(l){return [l,cap(l)];}));
-  }
-  function openP(o){if(panel)panel.classList.toggle('is-open',o);if(scrim)scrim.classList.toggle('is-on',o);}
-  var sbox=document.querySelector('[data-worksearch]');
-  if(sbox)sbox.addEventListener('click',function(){openP(true);});
-  if(input)input.addEventListener('focus',function(){openP(true);});
-  if(scrim)scrim.addEventListener('click',function(){openP(false);});
-  document.addEventListener('keydown',function(e){if(e.key==='Escape')openP(false);});
-  var deb=null;
-  if(input)input.addEventListener('input',function(e){
-    var v=e.target.value.trim().toLowerCase();
-    if(clr)clr.classList.toggle('is-on',!!v);
-    clearTimeout(deb);deb=setTimeout(function(){query=v;cols();apply();},120);
-  });
-  if(clr)clr.addEventListener('click',function(e){
-    e.preventDefault();e.stopPropagation();
-    input.value='';query='';clr.classList.remove('is-on');cols();apply();
-  });
-  var rst=document.querySelector('[data-workreset]');
-  if(rst)rst.addEventListener('click',function(e){
-    e.preventDefault();
-    sel={sol:{},loc:{},year:{}};
-    if(input)input.value='';query='';
-    if(clr)clr.classList.remove('is-on');
-    cols();apply();
-  });
-  /* BENTO LAYOUT - skyline packer, one height per column, always appending
-     downward. gap stays 0; the 2px separation is a 1px white border on
-     .collection-item-15, which cannot double up.
-
-     EMPTY-CELL FIX (2026-08-03): a 2x2 must straddle two columns whose
-     skylines are LEVEL. The old code placed it at Math.max of the two, so an
-     uneven pair left a permanent hole under the shorter column - a skyline
-     packer can only append downward, so nothing could ever fill it. That was
-     the phantom empty cell, and it appeared at some widths and not others
-     because INITIAL depends on cell width and viewport height, so different
-     screens land on different span sequences.
-     Now: only level pairs are considered, and if none exist the tile is
-     demoted to 1x1 rather than punching a hole. 0.5px tolerance because cell
-     is fractional and (h + 2*cell) vs ((h + cell) + cell) can differ by an
-     ulp. */
+  // LIST VIEW = NEWEST FIRST (2026-10-20): the grid keeps the shuffle; in list
+  // view (#work-grid.is-list) cards run by Year, newest at the top. Same year
+  // keeps the shuffle order. style.order sorts the list's flex column.
+  function yr(c){return parseInt(c._v.year[0],10)||0;}
+  var byYear=cards.slice().sort(function(a,b){return yr(b)-yr(a);});
+  byYear.forEach(function(c,i){c.style.order=i;});
+  /* BENTO LAYOUT - skyline packer, appends downward, gap 0 (the 2px line is a
+     1px border on .collection-item-15). EMPTY-CELL FIX 2026-08-03: a 2x2 only
+     goes on two LEVEL columns (0.5px tolerance), else it drops to 1x1 - write-up
+     in Notion > Decisions & Learnings. */
   var INITIAL=0,BATCH=0,renderLimit=0,matchedCount=0;
   function layout(visible){
     var cols=getCols(),gap=0;var cell=(list.offsetWidth-gap*(cols-1))/cols;
@@ -373,11 +133,10 @@ function init(){
       if(span===1){for(c=0;c<cols;c++){if(colH[c]<minH){minH=colH[c];col=c;}}}
       var size=cell*span+gap*(span-1);
       item.classList.toggle('yf-2x2',span===2);
-      item.style.width=size+'px';item.style.height=size+'px';
-      item.style.left=(col*(cell+gap))+'px';item.style.top=minH+'px';
+      item.style.width=size+'px';item.style.height=size+'px';item.style.left=(col*(cell+gap))+'px';item.style.top=minH+'px';
       for(var c2=col;c2<col+span;c2++)colH[c2]=minH+size+gap;
     });
-    list.style.height=Math.max.apply(null,colH)+'px';
+    list.style.height=Math.max.apply(null,colH.concat(0))+'px';
   }
   function computeBatch(){
     var cols=getCols();var cell=(list.offsetWidth||1200)/cols;
@@ -385,10 +144,13 @@ function init(){
     INITIAL=perScreen+cols;BATCH=perScreen;
   }
   var hasIO=(typeof IntersectionObserver!=='undefined');
+  // ARRIVAL COVER (2026-10-20): tiles rise as the YF Arrival Cover starts its
+  // fade, not unseen underneath it. 4s cap matches the cover's CSS fallback.
+  function afterCover(fn){var c=document.getElementById('yfload');if(!c||c.classList.contains('is-done'))return fn();var go=0,mo;function run(){if(go)return;go=1;if(mo)mo.disconnect();fn();}mo=new MutationObserver(function(){if(c.classList.contains('is-done'))run();});mo.observe(c,{attributes:true});setTimeout(run,4000);}
   var revealIO=hasIO?new IntersectionObserver(function(entries){
     var batch=[];
     entries.forEach(function(e){if(!e.isIntersecting)return;revealIO.unobserve(e.target);batch.push(e.target);});
-    batch.forEach(function(el,i){setTimeout(function(){el.classList.add('yf-in');},Math.min(i,10)*50);});
+    afterCover(function(){batch.forEach(function(el,i){setTimeout(function(){el.classList.add('yf-in');},Math.min(i,10)*50);});});
   },{rootMargin:'0px 0px -5% 0px',threshold:0.05}):null;
   function armReveal(items){
     items.forEach(function(el){
@@ -401,30 +163,245 @@ function init(){
   sentinel.setAttribute('data-work-sentinel','');
   sentinel.style.cssText='width:100%;height:1px;pointer-events:none;';
   wrap.appendChild(sentinel);
-  if(hasIO){
-    var io=new IntersectionObserver(function(entries){
-      if(entries[0].isIntersecting&&renderLimit<matchedCount){renderLimit+=BATCH;apply(true);}
-    },{rootMargin:'400px 0px'});
-    io.observe(sentinel);
+
+  /* ---- filter state ---- */
+  var sel={};FACETS.forEach(function(f){sel[f]={};});
+  var q='';
+  function picked(f){return Object.keys(sel[f]).filter(function(k){return sel[f][k];});}
+  function anyActive(){return !!q||FACETS.some(function(f){return picked(f).length>0;});}
+  function matches(card,except){
+    for(var i=0;i<FACETS.length;i++){
+      var f=FACETS[i];if(f===except)continue;
+      var p=picked(f);if(!p.length)continue;
+      var vals=card._v[f],hit=false;
+      for(var j=0;j<p.length;j++){if(vals.indexOf(p[j])!==-1){hit=true;break;}}
+      if(!hit)return false;
+    }
+    if(q){var toks=norm(q).split(/\s+/).filter(Boolean);for(var k=0;k<toks.length;k++){if(card._hay.indexOf(toks[k])===-1)return false;}}
+    return true;
   }
-  // apply(): only place display is decided. keepLimit=true on scroll
-  // reveal; a filter change re-seeds renderLimit so reveal restarts.
-  function apply(keepLimit){
-    var matched=cards.filter(match);
+  function pad(n){return n<10?'0'+n:''+n;}
+
+  function relayout(){
+    var src=wrap.classList.contains('is-list')?byYear:cards;
+    var matched=src.filter(function(card){return matches(card,null);});
     matchedCount=matched.length;
-    if(!keepLimit)renderLimit=INITIAL;
     if(!hasIO)renderLimit=matchedCount;
     if(renderLimit<INITIAL)renderLimit=INITIAL;
     var shown=matched.slice(0,renderLimit);
-    cards.forEach(function(card){card.style.display=(shown.indexOf(card)!==-1)?'':'none';});
+    var on=new Set(shown);
+    cards.forEach(function(card){card.style.display=on.has(card)?'':'none';});
     layout(shown);
     armReveal(shown);
     wrap.appendChild(sentinel);
-    if(ct)ct.innerHTML='<b>'+matchedCount+'</b> / '+cards.length+' projects';
+    wrap.toggleAttribute('data-yf-empty',matchedCount===0);
+    paint();
   }
-  window.addEventListener('resize',function(){computeBatch();apply(true);});
-  window.addEventListener('load',function(){computeBatch();apply(true);});
-  computeBatch();cols();apply();
+  if(hasIO){
+    var io=new IntersectionObserver(function(entries){
+      if(entries[0].isIntersecting&&renderLimit<matchedCount){
+        renderLimit+=BATCH;relayout();
+        // re-observe: list rows are short, so one batch may not push the
+        // sentinel out of range and IO would never fire again
+        io.unobserve(sentinel);io.observe(sentinel);
+      }
+    },{rootMargin:'400px 0px'});
+    io.observe(sentinel);
+  }
+
+  /* ---- facet dropdowns ---- */
+  var ui={};
+  function optionValues(f){
+    var seen={};cards.forEach(function(c){c._v[f].forEach(function(v){seen[v]=1;});});
+    var vals=Object.keys(seen);
+    if(f==='year')return vals.sort(function(a,b){return b-a;});
+    if(f==='solution')return vals.sort(function(a,b){var ia=SOL_ORDER.indexOf(a.toLowerCase()),ib=SOL_ORDER.indexOf(b.toLowerCase());return (ia<0?99:ia)-(ib<0?99:ib)||a.localeCompare(b);});
+    return vals.sort(function(a,b){return a.localeCompare(b);});
+  }
+  function accentFor(f,v){
+    if(f==='solution')return 'var(--solutions--'+v.toLowerCase().replace(/[^a-z]/g,'')+')';
+    if(f==='tactic'){
+      for(var i=0;i<cards.length;i++){
+        var labs=cards[i].querySelectorAll('.yfwrk-cardtacs .yfsolp-chip-label');
+        for(var j=0;j<labs.length;j++){if(txt(labs[j])===v){var a=labs[j].closest('[data-accent]');var c=a?(a.getAttribute('data-accent')||'').trim():'';if(c)return c;}}
+      }
+    }
+    return '';
+  }
+  document.querySelectorAll('[data-yf-facet]').forEach(function(box){
+    var f=box.getAttribute('data-yf-facet');if(FACETS.indexOf(f)===-1)return;
+    var tpl=box.querySelector('[data-yf-template="option"]');if(!tpl)return;
+    var holder=tpl.parentNode;
+    var toggle=box.querySelector('.w-dropdown-toggle');
+    var badge=box.querySelector('[data-yf-facet-n]');
+    var name=txt(toggle&&toggle.querySelector('[data-yf-facet-label]'))||f;
+    tpl.hidden=true;tpl.setAttribute('aria-hidden','true');
+    var opts={};
+    optionValues(f).forEach(function(v){
+      var o=tpl.cloneNode(true);
+      o.removeAttribute('data-yf-template');o.removeAttribute('aria-hidden');o.hidden=false;
+      o.setAttribute('data-yf-value',v);
+      if(o.tagName==='BUTTON')o.type='button';
+      o.setAttribute('role','menuitemcheckbox');
+      var lab=o.querySelector('[data-yf-opt-label]');if(lab)lab.textContent=v;
+      var acc=accentFor(f,v);if(acc)o.style.setProperty('--yf-accent',acc);
+      o.addEventListener('click',function(e){
+        e.preventDefault();e.stopPropagation();
+        if(o.getAttribute('aria-disabled')==='true'&&!sel[f][v])return;
+        sel[f][v]=!sel[f][v];
+        changed(f,v,sel[f][v]?'add':'remove');
+      });
+      holder.appendChild(o);opts[v]=o;
+    });
+    ui[f]={box:box,toggle:toggle,badge:badge,opts:opts,name:name};
+    if(toggle){toggle.setAttribute('aria-haspopup','true');}
+  });
+  // Webflow's dropdown closes when a LINK inside it is clicked; options are
+  // buttons, so it stays open for picking several. Esc and click-outside are
+  // Webflow's own.
+
+  /* ---- breadcrumb ---- */
+  var crumbs=document.querySelector('[data-yf-crumbs]');
+  var crumbTpl=crumbs&&crumbs.querySelector('[data-yf-template="crumb"]');
+  var crumbHolder=crumbTpl&&crumbTpl.parentNode;
+  if(crumbTpl){crumbTpl.hidden=true;crumbTpl.setAttribute('aria-hidden','true');}
+  var elShown=crumbs&&crumbs.querySelector('[data-yf-count-shown]');
+  var elTotal=crumbs&&crumbs.querySelector('[data-yf-count-total]');
+  var resetBtn=document.querySelector('[data-yf-reset]');
+  if(elTotal)elTotal.textContent=pad(cards.length);
+
+  function addCrumb(label,aria,onRemove){
+    if(!crumbTpl)return;
+    var c=crumbTpl.cloneNode(true);
+    c.removeAttribute('data-yf-template');c.removeAttribute('aria-hidden');c.hidden=false;
+    c.setAttribute('data-yf-crumb','');
+    if(c.tagName==='BUTTON')c.type='button';
+    var l=c.querySelector('[data-yf-crumb-label]');if(l)l.textContent=label;
+    c.setAttribute('aria-label',aria);
+    c.addEventListener('click',function(e){e.preventDefault();onRemove();});
+    crumbHolder.appendChild(c);
+  }
+
+  function paint(){
+    FACETS.forEach(function(f){
+      var u=ui[f];if(!u)return;
+      var n=0;
+      Object.keys(u.opts).forEach(function(v){
+        var o=u.opts[v],isOn=!!sel[f][v];
+        var count=cards.filter(function(c){return c._v[f].indexOf(v)!==-1&&matches(c,f);}).length;
+        var ne=o.querySelector('[data-yf-opt-n]');if(ne)ne.textContent=pad(count);
+        o.classList.toggle('is-on',isOn);
+        o.setAttribute('aria-checked',isOn?'true':'false');
+        var zero=count===0&&!isOn;
+        o.classList.toggle('is-zero',zero);
+        o.setAttribute('aria-disabled',zero?'true':'false');
+        if(isOn)n++;
+      });
+      u.box.classList.toggle('is-active',n>0);
+      if(u.badge){u.badge.textContent=n?pad(n):'';u.badge.hidden=!n;}
+    });
+    if(crumbHolder){
+      crumbHolder.querySelectorAll('[data-yf-crumb]').forEach(function(c){c.remove();});
+      FACETS.forEach(function(f){
+        picked(f).forEach(function(v){
+          addCrumb(v,'Remove '+((ui[f]&&ui[f].name)||f)+': '+v,function(){sel[f][v]=false;changed(f,v,'remove');});
+        });
+      });
+      if(q)addCrumb('“'+q+'”','Clear search: '+q,function(){setQuery('',true);});
+    }
+    var active=anyActive();
+    if(crumbs)crumbs.classList.toggle('is-filtered',active);
+    if(elShown)elShown.textContent=pad(matchedCount);
+    if(resetBtn)resetBtn.disabled=!active;
+  }
+
+  /* ---- URL + analytics ---- */
+  var KEYS={solution:'solution',tactic:'tactic',industry:'industry',region:'region',company:'company',year:'year'};
+  function writeURL(){
+    try{
+      var p=new URLSearchParams(location.search);
+      FACETS.forEach(function(f){p.delete(KEYS[f]);picked(f).forEach(function(v){p.append(KEYS[f],v);});});
+      p.delete('q');if(q)p.set('q',q);
+      var s=p.toString();
+      history.replaceState(history.state,'',location.pathname+(s?'?'+s:'')+location.hash);
+    }catch(e){}
+  }
+  function readURL(){
+    try{
+      var p=new URLSearchParams(location.search);
+      FACETS.forEach(function(f){p.getAll(KEYS[f]).forEach(function(v){if(ui[f]&&ui[f].opts[v])sel[f][v]=true;});});
+      q=(p.get('q')||'').trim();
+    }catch(e){}
+  }
+  function track(facet,value,action){
+    try{if(typeof window.gtag==='function')window.gtag('event','filter_apply',{filter_facet:facet,filter_value:String(value).slice(0,100),filter_action:action,results:matchedCount});}catch(e){}
+  }
+  function scrollToGrid(){
+    var bar=document.querySelector('[data-workfilter]');
+    var stick=bar&&bar.closest('.sticky')||bar;
+    var off=(stick?stick.getBoundingClientRect().bottom:0);
+    var top=wrap.getBoundingClientRect().top;
+    if(top<off-1)window.scrollTo({top:window.scrollY+top-off,behavior:'auto'});
+  }
+  function changed(f,v,action){
+    renderLimit=INITIAL;relayout();writeURL();scrollToGrid();track(f,v,action);
+  }
+
+  /* ---- search (nav) ---- */
+  var sBox=document.querySelector('[data-yf-search]');
+  var sInput=sBox&&sBox.querySelector('[data-yf-search-input]');
+  var sToggle=sBox&&sBox.querySelector('[data-yf-search-toggle]');
+  var sClose=sBox&&sBox.querySelector('[data-yf-search-close]');
+  var sTimer=0,tTimer=0;
+  function openSearch(open,focus){
+    if(!sBox)return;
+    sBox.classList.toggle('is-open',open);
+    if(sToggle)sToggle.setAttribute('aria-expanded',open?'true':'false');
+    if(open&&focus&&sInput)setTimeout(function(){sInput.focus();},30);
+  }
+  function setQuery(v,fromChip){
+    q=(v||'').trim();
+    if(sInput&&sInput.value!==v)sInput.value=v;
+    if(sBox)sBox.classList.toggle('has-q',!!q);
+    renderLimit=INITIAL;relayout();writeURL();
+    if(fromChip)openSearch(false,false);
+    clearTimeout(tTimer);if(q)tTimer=setTimeout(function(){track('search',q,'search');},1200);
+  }
+  if(sBox&&sInput){
+    sBox.classList.add('is-live');
+    try{sInput.type='search';}catch(e){}
+    sInput.setAttribute('autocomplete','off');sInput.setAttribute('spellcheck','false');
+    var sField=sBox.querySelector('[data-yf-search-field]');
+    if(sField&&!sField.id)sField.id='yfnav-search-field';
+    if(sToggle){sToggle.type='button';sToggle.setAttribute('aria-expanded','false');
+      if(sField)sToggle.setAttribute('aria-controls',sField.id);
+      sToggle.addEventListener('click',function(e){e.preventDefault();openSearch(!sBox.classList.contains('is-open'),true);});}
+    if(sClose){sClose.type='button';sClose.addEventListener('click',function(e){e.preventDefault();if(sInput.value){setQuery('',false);sInput.focus();}else{openSearch(false,false);if(sToggle)sToggle.focus();}});}
+    sInput.addEventListener('input',function(){var v=sInput.value;clearTimeout(sTimer);sTimer=setTimeout(function(){setQuery(v,false);scrollToGrid();},120);});
+    sInput.addEventListener('keydown',function(e){
+      if(e.key==='Escape'){e.preventDefault();openSearch(false,false);if(sToggle)sToggle.focus();}
+      if(e.key==='Enter'){e.preventDefault();sInput.blur();scrollToGrid();}
+    });
+    var f=sInput.closest('form');if(f)f.addEventListener('submit',function(e){e.preventDefault();});
+  }
+
+  if(resetBtn){
+    if(resetBtn.tagName==='BUTTON')resetBtn.type='button';
+    resetBtn.addEventListener('click',function(e){
+      e.preventDefault();
+      FACETS.forEach(function(f){sel[f]={};});
+      setQuery('',true);track('all','reset','reset');
+    });
+  }
+
+  readURL();
+  if(q&&sInput){sInput.value=q;openSearch(true,false);}
+  window.addEventListener('resize',function(){computeBatch();relayout();});
+  window.addEventListener('load',function(){computeBatch();relayout();});
+  computeBatch();
+  renderLimit=INITIAL;
+  relayout();
+  window.yfWorkFilter={version:'2.0.0',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
 }
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
 })();

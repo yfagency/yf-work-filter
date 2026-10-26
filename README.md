@@ -3,8 +3,8 @@
 The grid and filter behind **yfkk.co/work**: the bento grid, the progressive reveal, and
 a filter that works like **Work Mosaic** (YF Builds): an always-visible search bar in the
 nav; clicking or typing in it drops a panel with one column per facet (Solution, Tactic,
-Industry, Region, Company, Year) with live counts; hovering an option outlines the tiles
-it would keep, in its colour, and dims the rest. A breadcrumb row under the nav always
+Industry, Region, Company, Year) with live counts; hovering an option dims the tiles it
+would hide. A breadcrumb row under the nav always
 says what you are looking at, and an empty state has its own reset.
 
 One file, no dependencies, no build step: `work-filter.js`.
@@ -25,7 +25,7 @@ so the Designer canvas matches the live page. The script only reads, clones and 
 |---|---|
 | `work-filter.js` | this repo → jsDelivr (pinned to a **commit SHA**) → registered hosted script `yf_work_filter`, Work page footer |
 | Filter panel, breadcrumb row, empty state | Native elements in the Work Filter Bar on the Work page (`yfwrk-panel*`, `yfwrk-fopt*`, `yfwrk-crumb*`, `yfwrk-reset*`, `yfwrk-empty`). The panel is `display:none` until opened, like a Dropdown list. |
-| Nav search bar | Native block inside **Z Nav Bar (mobile)**, right after the logo, shown only where the instance prop **Show Work search** is on (Work page only). Desktop: a bar up to 28rem. Tablet (768–991): the nav links leave no room, so it rests as a round pill and widens over the links while open. Phone: fills the space between logo and menu. |
+| Nav search bar | Native block inside **Z Nav Bar (mobile)**, right after the logo, shown only where the instance prop **Show Work search** is on (Work page only). Desktop: a slim 15rem underline field right-aligned beside the nav links (the wrapper fills the spare nav space). Tablet (768–991): the nav links leave no room, so it rests as its search icon and widens over the links while open. Phone: fills the space between logo and menu. |
 | Hovers | Native hover states on `yfwrk-fopt`, `yfwrk-panel-close`, `yfnav-search-field` |
 | States CSS (panel open, option on/dimmed, peek, has text, empty, focus, tablet search) | HTML Embed on the Work page, named "Work Filter Code (states: …)" |
 | Facet data | The CMS-bound elements already inside every card (added for the list view) |
@@ -121,12 +121,15 @@ silently doesn't load.
 
 ## Current version
 
-- `v2.1.1` — see git log for the commit
-- SRI: `sha384-DwvguKjzTNoIG+hmsavww9C7U9SjOMfmwukukRRFnRHkZJh5MP/oP+A3QDMKghv7`
-- `https://cdn.jsdelivr.net/gh/yfagency/yf-work-filter@7db5950a46c46552eb4a47d6c0436f9e369ae0db/work-filter.js`
+- `v2.1.1` — commit `a4e580e2605a5fc5f7b333556cc4088b1548d8cb`
+- SRI: `sha384-W8Eq2XTxCiXAytiHxxFL1ra4WS9jEkc+nFfS2NpIv4eGSy39Nsfllq+5qO/l52XR`
+- `https://cdn.jsdelivr.net/gh/yfagency/yf-work-filter@a4e580e2605a5fc5f7b333556cc4088b1548d8cb/work-filter.js`
 
 ## History
 
+- v2.1.1 (2026-10-26) — only the visible search field opens the panel; the nav search is a
+  slim underline field beside the nav links (no box, no thick lines); peek dims without an
+  outline.
 - v2.1.0 (2026-10-26) — Work Mosaic interaction: nav search bar opens a six-column filter
   panel; option hover peeks the matching tiles. Replaces the v2.0 dropdown pills (Z: "search
   bar, not drop down pills").

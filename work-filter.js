@@ -1,4 +1,4 @@
-/* YF - Work page grid + filter  ·  v2.0.0  (2026-10-26, ZF-PC)
+/* YF - Work page grid + filter  ·  v2.0.1  (2026-10-26, ZF-PC)
  * ---------------------------------------------------------------------------
  * Drives yfkk.co/work: the bento grid, the progressive reveal, and the filter -
  * six facets (Solution, Tactic, Industry, Region, Company, Year), search from
@@ -29,7 +29,9 @@
  *   [data-yf-crumbs]                   breadcrumb row
  *     [data-yf-count-shown] [data-yf-count-total]
  *     [data-yf-template="crumb"]        chip template  > [data-yf-crumb-label]
- *     [data-yf-reset]
+ *     [data-yf-reset]                 (any number: breadcrumb + empty state)
+ *   #work-grid[data-yf-empty]          set when nothing matches; the empty-state
+ *                                      block (.yfwrk-empty) is shown by CSS
  *   [data-yf-search]                   nav search block (Work page only)
  *     [data-yf-search-toggle] [data-yf-search-input] [data-yf-search-close]
  *
@@ -267,7 +269,7 @@ function init(){
   if(crumbTpl){crumbTpl.hidden=true;crumbTpl.setAttribute('aria-hidden','true');}
   var elShown=crumbs&&crumbs.querySelector('[data-yf-count-shown]');
   var elTotal=crumbs&&crumbs.querySelector('[data-yf-count-total]');
-  var resetBtn=document.querySelector('[data-yf-reset]');
+  var resetBtns=Array.prototype.slice.call(document.querySelectorAll('[data-yf-reset]'));
   if(elTotal)elTotal.textContent=pad(cards.length);
 
   function addCrumb(label,aria,onRemove){
@@ -312,7 +314,7 @@ function init(){
     var active=anyActive();
     if(crumbs)crumbs.classList.toggle('is-filtered',active);
     if(elShown)elShown.textContent=pad(matchedCount);
-    if(resetBtn)resetBtn.disabled=!active;
+    resetBtns.forEach(function(b){if(b.tagName==='BUTTON')b.disabled=!active;});
   }
 
   /* ---- URL + analytics ---- */
@@ -385,14 +387,14 @@ function init(){
     var f=sInput.closest('form');if(f)f.addEventListener('submit',function(e){e.preventDefault();});
   }
 
-  if(resetBtn){
+  resetBtns.forEach(function(resetBtn){
     if(resetBtn.tagName==='BUTTON')resetBtn.type='button';
     resetBtn.addEventListener('click',function(e){
       e.preventDefault();
       FACETS.forEach(function(f){sel[f]={};});
       setQuery('',true);track('all','reset','reset');
     });
-  }
+  });
 
   readURL();
   if(q&&sInput){sInput.value=q;openSearch(true,false);}
@@ -401,7 +403,7 @@ function init(){
   computeBatch();
   renderLimit=INITIAL;
   relayout();
-  window.yfWorkFilter={version:'2.0.0',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
+  window.yfWorkFilter={version:'2.0.1',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
 }
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
 })();

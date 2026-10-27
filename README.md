@@ -125,6 +125,12 @@ bumped `version` in `window.yfWorkFilter`.
 
 ## History
 
+- 2026-10-27 (Webflow only, script unchanged) — restyled to Z's Figma (YF Website 2026 — For
+  Zia, node 4967:23963): soft filled 430px search pill (no border), regular-weight count,
+  light sentence-case Reset, grid/list as a pale track with a yellow knob, active chips on
+  their own line under the search; nav language switcher as globe + EN + chevron. Icons are
+  the Figma SVGs as mask-image classes (yfwrk-search-icon, yfwrk-reset-icon,
+  yfwrk-viewicon-grid / -list, yfnav-langchev).
 - 2026-10-27 (Webflow only, script unchanged) — search moved from the nav into the filter
   row under the nav, restyled as the 1px pill; grid/list toggle sits beside it; panel drops
   below the row; nav is identical on every page again.

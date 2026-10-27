@@ -1,11 +1,11 @@
-/* YF - Work page grid + filter  ·  v2.1.1  (2026-10-26, ZF-PC)
+/* YF - Work page grid + filter  ·  v2.1.2  (2026-10-27, ZF-PC)
  * ---------------------------------------------------------------------------
  * Drives yfkk.co/work: the bento grid, the progressive reveal, and the filter.
  * Interaction is Work Mosaic's (YF Builds): an always-visible SEARCH BAR in the
- * nav; clicking or typing in it drops a FILTER PANEL with one column per facet
- * (Solution, Tactic, Industry, Region, Company, Year). Hovering an option
- * PEEKS: the tiles it would keep get an outline in its colour, the rest dim.
- * A breadcrumb row under the nav always says what you are looking at.
+ * filter row under the nav; clicking or typing in it drops a FILTER PANEL with
+ * one column per facet (Solution, Tactic, Industry, Region, Company, Year).
+ * Hovering an option PEEKS: the tiles it would hide dim. The same row holds the
+ * count, the active chips, Reset and the grid/list toggle.
  *
  * WHY A HOSTED FILE. The Work page's own footer code is capped at 10,000
  * characters and the grid engine alone was at ~9,840. This file has no cap,
@@ -16,9 +16,8 @@
  *   Webflow (real Designer elements, real classes, visible on the canvas):
  *     the filter panel (six columns, one template option each, a footer with
  *     count, Reset and Show results), the breadcrumb row with one template
- *     chip, the count, Reset, the view toggle, and the nav search bar (Z Nav
- *     Bar (mobile), shown on Work only by the component setting "Show Work
- *     search").
+ *     chip, the count, Reset, the view toggle, and the search bar (first item
+ *     of that row; the nav component carries no search since 2026-10-27).
  *   Here: behaviour only. States the script toggles (is-on, is-zero, ...) are
  *     styled in the named embed "Work Filter Code (states)" on the Work page.
  *
@@ -39,7 +38,7 @@
  *     [data-yf-reset]                 (any number: breadcrumb + empty state)
  *   #work-grid[data-yf-empty]          set when nothing matches; the empty-state
  *                                      block (.yfwrk-empty) is shown by CSS
- *   [data-yf-search]                   nav search bar (Work page only); gets
+ *   [data-yf-search]                   search bar (filter row, one only); gets
  *                                      .is-open with the panel, .has-q with text
  *     [data-yf-search-input] [data-yf-search-close] (clears the text)
  *   #work-grid.is-peek                 while an option is hovered; matching
@@ -377,7 +376,7 @@ function init(){
   var sBox=document.querySelector('[data-yf-search]');
   var sInput=sBox&&sBox.querySelector('[data-yf-search-input]');
   var sClose=sBox&&sBox.querySelector('[data-yf-search-close]');
-  // the clickable zone is the visible field; the wrapper can be wider (it fills spare nav space)
+  // the clickable zone is the visible field; the wrapper can be wider (it can stretch)
   var sZone=(sBox&&sBox.querySelector('[data-yf-search-field]'))||sBox;
   var sTimer=0,tTimer=0;
   function isOpen(){return !!(panel&&panel.classList.contains('is-open'));}
@@ -444,7 +443,7 @@ function init(){
   computeBatch();
   renderLimit=INITIAL;
   relayout();
-  window.yfWorkFilter={version:'2.1.1',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
+  window.yfWorkFilter={version:'2.1.2',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
 }
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
 })();

@@ -2,7 +2,7 @@
 
 The grid and filter behind **yfkk.co/work**: the bento grid, the progressive reveal, and
 a filter that works like **Work Mosaic** (YF Builds): an always-visible search bar in the
-nav; clicking or typing in it drops a panel with one column per facet (Solution, Tactic,
+filter row under the nav; clicking or typing in it drops a panel with one column per facet (Solution, Tactic,
 Industry, Region, Company, Year) with live counts; hovering an option dims the tiles it
 would hide. A breadcrumb row under the nav always
 says what you are looking at, and an empty state has its own reset.
@@ -25,9 +25,9 @@ so the Designer canvas matches the live page. The script only reads, clones and 
 |---|---|
 | `work-filter.js` | this repo → jsDelivr (pinned to a **commit SHA**) → registered hosted script `yf_work_filter`, Work page footer |
 | Filter panel, breadcrumb row, empty state | Native elements in the Work Filter Bar on the Work page (`yfwrk-panel*`, `yfwrk-fopt*`, `yfwrk-crumb*`, `yfwrk-reset*`, `yfwrk-empty`). The panel is `display:none` until opened, like a Dropdown list. |
-| Nav search bar | Native block inside **Z Nav Bar (mobile)**, right after the logo, shown only where the instance prop **Show Work search** is on (Work page only). Desktop: a slim 15rem underline field right-aligned beside the nav links (the wrapper fills the spare nav space). Tablet (768–991): the nav links leave no room, so it rests as its search icon and widens over the links while open. Phone: fills the space between logo and menu. |
-| Hovers | Native hover states on `yfwrk-fopt`, `yfwrk-panel-close`, `yfnav-search-field` |
-| States CSS (panel open, option on/dimmed, peek, has text, empty, focus, tablet search) | HTML Embed on the Work page, named "Work Filter Code (states: …)" |
+| Search bar | Native block on the Work page, first item of the filter row under the nav (`yfwrk-search*`): a 1px pill that stretches across the row, followed by the count, active chips, Reset and the grid/list toggle. Phones: the search takes its own line. The nav component carries no search (it was removed 2026-10-27, with its *Show Work search* prop). |
+| Hovers | Native hover states on `yfwrk-fopt`, `yfwrk-panel-close`, `yfwrk-search-field` |
+| States CSS (panel open, option on/dimmed, peek, has text, empty, focus) | HTML Embed on the Work page, named "Work Filter Code (states: …)" |
 | Facet data | The CMS-bound elements already inside every card (added for the list view) |
 
 The old inline footer script, the v1 nav embed and the v2.0 dropdown pills are gone.
@@ -36,7 +36,6 @@ The old inline footer script, the v1 nav embed and the v2.0 dropdown pills are g
 
 - Site `[ZF] YF Agency` — `69dc81709c46348ec3a99eca`
 - Page Work — `69dc81709c46348ec3a99ebd`
-- Component Z Nav Bar (mobile) — `2a368872-14e6-5f49-83e9-7b1280360657`, prop *Show Work search*
 - Collection Projects — `69dc81709c46348ec3a99f64`
 - Staging: `yf2025-b2e129e09a76cdd78ea8ab6b1a04d750.webflow.io/work` (staging only; production publishing is Z's call)
 
@@ -55,7 +54,7 @@ The old inline footer script, the v1 nav embed and the v2.0 dropdown pills are g
     [data-yf-template="crumb"] > [data-yf-crumb-label]
 [data-yf-count-shown] [data-yf-count-sep] [data-yf-count-total]   any number
 [data-yf-reset]                                   any number (panel, breadcrumb, empty state)
-[data-yf-search]                                  nav search bar (one only)
+[data-yf-search]                                  search bar in the filter row (one only)
   [data-yf-search-input] [data-yf-search-close]   close = clear the text
 #work-grid.is-peek / .is-peek-hit                 while an option is hovered
 #work-grid[data-yf-empty]                         set by the script when nothing matches;
@@ -121,12 +120,14 @@ silently doesn't load.
 
 ## Current version
 
-- `v2.1.1` — commit `a4e580e2605a5fc5f7b333556cc4088b1548d8cb`
-- SRI: `sha384-W8Eq2XTxCiXAytiHxxFL1ra4WS9jEkc+nFfS2NpIv4eGSy39Nsfllq+5qO/l52XR`
-- `https://cdn.jsdelivr.net/gh/yfagency/yf-work-filter@a4e580e2605a5fc5f7b333556cc4088b1548d8cb/work-filter.js`
+See the YF Builds row or `git log`; the registered script is pinned to the commit that
+bumped `version` in `window.yfWorkFilter`.
 
 ## History
 
+- 2026-10-27 (Webflow only, script unchanged) — search moved from the nav into the filter
+  row under the nav, restyled as the 1px pill; grid/list toggle sits beside it; panel drops
+  below the row; nav is identical on every page again.
 - v2.1.1 (2026-10-26) — only the visible search field opens the panel; the nav search is a
   slim underline field beside the nav links (no box, no thick lines); peek dims without an
   outline.

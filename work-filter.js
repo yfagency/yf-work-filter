@@ -1,9 +1,14 @@
-/* YF - Work page grid + filter  ·  v2.2.0  (2026-10-28, ZF-PC)
+/* YF - Work page grid + filter  ·  v2.3.0  (2026-10-28, ZF-PC)
  * ---------------------------------------------------------------------------
  * Drives yfkk.co/work: the bento grid, the progressive reveal, and the filter.
- * Interaction is Work Mosaic's (YF Builds): an always-visible SEARCH BAR in the
- * filter row under the nav; clicking or typing in it drops a FILTER PANEL with
- * one column per facet (Solution, Tactic, Industry, Region, Company, Year).
+ * An always-visible SEARCH BAR in the filter strip at the top of the grid (the
+ * strip scrolls with the page; it is not sticky since v2.3). Clicking or typing
+ * in it OPENS the FILTER PANEL - one column per facet (Solution, Tactic,
+ * Industry, Region, Company, Year) - as a section in the page flow that pushes
+ * the grid down. It STAYS OPEN while you filter and closes only on its
+ * "Hide filters" button ([data-yf-panel-close]) or Esc. Opening and closing
+ * animate the panel's height; if the panel has been scrolled fully out of view
+ * when it closes, the page is shifted so the grid does not jump.
  * The same row holds the count, the active chips, Reset and the grid/list
  * toggle. There is no hover preview (the v2.1 "peek" was removed 2026-10-28).
  *
@@ -34,8 +39,8 @@
  * THE DOM CONTRACT - attributes, never class names, so a class rename in the
  * Designer cannot break this file.
  *   #work-grid                         Projects Collection List wrapper
- *   [data-yf-panel]                    filter panel; .is-open while open
- *     [data-yf-panel-close]             any number; closes the panel
+ *   [data-yf-panel]                    filter panel (in flow); .is-open while open
+ *     [data-yf-panel-close]             any number; closes the panel ("Hide filters")
  *   [data-yf-facet="<key>"]            one column per facet; key = solution |
  *                                      tactic | industry | region | company | year
  *     [data-yf-facet-label]             column heading (used in aria labels)
@@ -406,15 +411,8 @@ function init(){
   function track(facet,value,action){
     try{if(typeof window.gtag==='function')window.gtag('event','filter_apply',{filter_facet:facet,filter_value:String(value).slice(0,100),filter_action:action,results:matchedCount});}catch(e){}
   }
-  function scrollToGrid(){
-    var bar=document.querySelector('[data-workfilter]');
-    var stick=bar&&bar.closest('.sticky')||bar;
-    var off=(stick?stick.getBoundingClientRect().bottom:0);
-    var top=wrap.getBoundingClientRect().top;
-    if(top<off-1)window.scrollTo({top:window.scrollY+top-off,behavior:'auto'});
-  }
   function changed(f,v,action){
-    renderLimit=INITIAL;relayout(true);writeURL();scrollToGrid();track(f,v,action);
+    renderLimit=INITIAL;relayout(true);writeURL();track(f,v,action);
   }
 
   /* ---- search bar + filter panel (Work Mosaic) ---- */
@@ -424,13 +422,38 @@ function init(){
   // the clickable zone is the visible field; the wrapper can be wider (it can stretch)
   var sZone=(sBox&&sBox.querySelector('[data-yf-search-field]'))||sBox;
   var sTimer=0,tTimer=0;
-  function isOpen(){return !!(panel&&panel.classList.contains('is-open'));}
+  var panelOpen=false,panelFx=null;
+  function isOpen(){return panelOpen;}
+  function navBottom(){var n=document.querySelector('.znavbar');return n?Math.max(0,n.getBoundingClientRect().bottom):0;}
   function openPanel(open){
     if(!panel)return;
-    if(isOpen()===open)return;
-    panel.classList.toggle('is-open',open);
+    if(panelOpen===open)return;
+    panelOpen=open;
     if(sBox)sBox.classList.toggle('is-open',open);
     if(sInput)sInput.setAttribute('aria-expanded',open?'true':'false');
+    if(panelFx){try{panelFx.cancel();}catch(e){}panelFx=null;}
+    var fx=!still&&!!panel.animate;
+    var gap=parseFloat(getComputedStyle(panel.parentNode).rowGap)||0;
+    function settle(){panel.style.overflow='';panelFx=null;}
+    if(open){
+      panel.classList.add('is-open');
+      if(!fx)return;
+      var h=panel.offsetHeight;panel.style.overflow='hidden';
+      panelFx=panel.animate([{height:'0px',marginTop:(-gap)+'px',opacity:0},{height:h+'px',marginTop:'0px',opacity:1}],{duration:450,easing:EASE});
+      panelFx.onfinish=settle;
+      return;
+    }
+    var r=panel.getBoundingClientRect(),away=r.bottom<=navBottom();
+    // scrolled past the whole panel: close at once and hold the grid still
+    if(!fx||away){
+      var before=wrap.getBoundingClientRect().top;
+      panel.classList.remove('is-open');settle();
+      if(away)window.scrollBy(0,wrap.getBoundingClientRect().top-before);
+      return;
+    }
+    var hh=panel.offsetHeight;panel.style.overflow='hidden';
+    var an=panelFx=panel.animate([{height:hh+'px',marginTop:'0px',opacity:1},{height:'0px',marginTop:(-gap)+'px',opacity:0}],{duration:380,easing:EASE});
+    an.onfinish=function(){if(panelFx!==an)return;panel.classList.remove('is-open');an.cancel();settle();};
   }
   function setQuery(v){
     q=(v||'').trim();
@@ -443,14 +466,10 @@ function init(){
     if(!panel.id)panel.id='yfwrk-panel';
     all('[data-yf-panel-close]').forEach(function(b){
       if(b.tagName==='BUTTON')b.type='button';
-      b.addEventListener('click',function(e){e.preventDefault();openPanel(false);scrollToGrid();});
+      b.addEventListener('click',function(e){e.preventDefault();openPanel(false);});
     });
-    // click outside the panel and the search bar closes it (Mosaic's scrim)
-    document.addEventListener('pointerdown',function(e){
-      if(!isOpen())return;
-      if(panel.contains(e.target)||(sZone&&sZone.contains(e.target)))return;
-      openPanel(false);
-    });
+    // v2.3: no click-outside close - the panel is part of the page and stays
+    // open until "Hide filters" (or Esc)
     document.addEventListener('keydown',function(e){
       if(e.key==='Escape'&&isOpen()){openPanel(false);if(sInput)sInput.focus();}
     });
@@ -465,7 +484,7 @@ function init(){
     if(sClose){sClose.type='button';sClose.addEventListener('click',function(e){e.preventDefault();setQuery('');sInput.focus();});}
     sInput.addEventListener('input',function(){var v=sInput.value;openPanel(true);clearTimeout(sTimer);sTimer=setTimeout(function(){setQuery(v);},120);});
     sInput.addEventListener('keydown',function(e){
-      if(e.key==='Enter'){e.preventDefault();clearTimeout(sTimer);setQuery(sInput.value);openPanel(false);sInput.blur();scrollToGrid();}
+      if(e.key==='Enter'){e.preventDefault();clearTimeout(sTimer);setQuery(sInput.value);}
     });
     var form=sInput.closest('form');if(form)form.addEventListener('submit',function(e){e.preventDefault();});
   }
@@ -486,7 +505,7 @@ function init(){
   computeBatch();
   renderLimit=INITIAL;
   relayout();
-  window.yfWorkFilter={version:'2.2.0',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
+  window.yfWorkFilter={version:'2.3.0',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
 }
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
 })();

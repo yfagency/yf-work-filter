@@ -3,8 +3,9 @@
 The grid and filter behind **yfkk.co/work**: the bento grid, the progressive reveal, and
 a filter that works like **Work Mosaic** (YF Builds): an always-visible search bar in the
 filter row under the nav; clicking or typing in it drops a panel with one column per facet (Solution, Tactic,
-Industry, Region, Company, Year) with live counts; hovering an option dims the tiles it
-would hide. A breadcrumb row under the nav always
+Industry, Region, Company, Year) with live counts. A filter change assembles the grid:
+tiles that drop out fade in place, tiles that stay glide to their new cell, tiles that
+come in rise in like the progressive reveal. A breadcrumb row under the nav always
 says what you are looking at, and an empty state has its own reset.
 
 One file, no dependencies, no build step: `work-filter.js`.
@@ -16,7 +17,7 @@ rejects `<script>` from the API. The script is past the cap and its comments are
 record of several hard-won fixes. Hosting it here removes the cap, puts it in version
 control, and makes changes reviewable as diffs.
 
-## How it is wired (v2.1)
+## How it is wired (v2.2)
 
 Everything you can see is a native Webflow element with a real class bound to variables,
 so the Designer canvas matches the live page. The script only reads, clones and toggles.
@@ -26,8 +27,9 @@ so the Designer canvas matches the live page. The script only reads, clones and 
 | `work-filter.js` | this repo → jsDelivr (pinned to a **commit SHA**) → registered hosted script `yf_work_filter`, Work page footer |
 | Filter panel, breadcrumb row, empty state | Native elements in the Work Filter Bar on the Work page (`yfwrk-panel*`, `yfwrk-fopt*`, `yfwrk-crumb*`, `yfwrk-reset*`, `yfwrk-empty`). The panel is `display:none` until opened, like a Dropdown list. |
 | Search bar | Native block on the Work page, first item of the filter row under the nav (`yfwrk-search*`): a 1px pill that stretches across the row, followed by the count, active chips, Reset and the grid/list toggle. Phones: the search takes its own line. The nav component carries no search (it was removed 2026-10-27, with its *Show Work search* prop). |
-| Hovers | Native hover states on `yfwrk-fopt`, `yfwrk-panel-close`, `yfwrk-search-field` |
-| States CSS (panel open, option on/dimmed, peek, has text, empty, focus) | HTML Embed on the Work page, named "Work Filter Code (states: …)" |
+| Hovers | Native hover states on `yfwrk-fopt`, `yfwrk-panel-close`, `yfwrk-search-field`. Options have no hover preview on the grid. |
+| Filter animation | In `work-filter.js` (`relayout(true)`): Web Animations on the cards, no CSS needed. Arriving tiles reuse the reveal classes (`[data-yf-anim]` / `.yf-in`) from the Work page head code. |
+| States CSS (panel open, option on/dimmed, has text, empty, focus) | HTML Embed on the Work page, named "Work Filter Code (states: …)" |
 | Facet data | The CMS-bound elements already inside every card (added for the list view) |
 
 The old inline footer script, the v1 nav embed and the v2.0 dropdown pills are gone.
@@ -56,7 +58,6 @@ The old inline footer script, the v1 nav embed and the v2.0 dropdown pills are g
 [data-yf-reset]                                   any number (panel, breadcrumb, empty state)
 [data-yf-search]                                  search bar in the filter row (one only)
   [data-yf-search-input] [data-yf-search-close]   close = clear the text
-#work-grid.is-peek / .is-peek-hit                 while an option is hovered
 #work-grid[data-yf-empty]                         set by the script when nothing matches;
                                                   CSS shows the following .yfwrk-empty
 ```
@@ -89,7 +90,12 @@ with no readable facet never matches that filter.
   `filter_action`, `results`).
 - The panel opens on a click or focus in the search bar and on typing; it closes on
   Show results, Esc, Enter in the search, or a click anywhere outside it and the bar.
-- Peek is mouse only (`hover:hover` and a fine pointer); touch devices skip it.
+- Filter animation (search, options, chips, Reset): leaving tiles fade and shrink in
+  place (0.22s, grid only; list rows leave at once), staying tiles glide to their new
+  cell and resize between 1x1 and 2x2 (0.6s, `cubic-bezier(0.16, 1, 0.3, 1)`, 15ms
+  stagger), arriving tiles re-run the reveal 160ms later. A click mid-animation starts
+  from wherever the tiles are. Scroll batches, resizes and the view switch never
+  animate; reduced motion turns it all off.
 - `window.yfWorkFilter` exposes `version`, `state()` and `count()` for debugging.
 
 ## Traps
@@ -112,7 +118,7 @@ pin jsDelivr to the **full commit SHA** (immutable, so the SRI stays valid forev
    and check it against what jsDelivr serves for that SHA.
 4. In Webflow, register a new version of `yf_work_filter` with the new URL and hash, and
    apply that version to the Work page footer.
-5. Publish to **staging** and check: search bar opens the panel, counts, peek on hover,
+5. Publish to **staging** and check: search bar opens the panel, counts, filter animation,
    breadcrumb, reset, URL reload, list view, empty state, 375px and 768px, console.
 
 If the hash doesn't match the served bytes the browser refuses the script and the filter
@@ -125,6 +131,10 @@ bumped `version` in `window.yfWorkFilter`.
 
 ## History
 
+- v2.2.0 (2026-10-28) — option hover peek removed (Z: it whited out the grid). A filter
+  change now assembles the grid (fade out, glide, rise in) instead of teleporting tiles,
+  using the reveal's own easing so the lazy loader reads as the same motion. States
+  embed loses its peek rules.
 - 2026-10-28 (Webflow only, script unchanged) — list view hover follows Z's directional
   demo: a full-row fill in the brand colour (row link `::after`, `--yfl-c`) scales in
   from the edge the pointer enters by and retracts toward the edge it leaves by

@@ -144,6 +144,11 @@ bumped `version` in `window.yfWorkFilter`.
   sweep is one continuous movement instead of a trail of half-finished per-row fills.
   The lit row gets `.is-hot` (light text) instead of `:hover`. Colour is flattened onto
   the grid ground (#work-grid background), so it matches the thumbnail tile.
+  Same day, after Z found it laggy: the slider moves by TRANSFORM ONLY (a fixed 100px
+  block, translate3d to the row's top + scaleY to its height, will-change: transform) so
+  it runs on the GPU; animating height re-laid-out the page every frame. 0.34s,
+  cubic-bezier(0.22, 1, 0.36, 1); speed and easing are `--yfl-speed` / `--yfl-ease` on
+  `#work-grid.is-list` in the list view embed.
 - v2.4.0 (2026-10-28) — each panel column heading shows "selected / total" ("01 / 07"),
   muted at rest (yfwrk-panel-hn, Text Light) and Brand/Dark once the column has a
   selection. Each column ends in a native "More options arrow" (yfwrk-panel-more +

@@ -125,6 +125,11 @@ bumped `version` in `window.yfWorkFilter`.
 
 ## History
 
+- 2026-10-28 (Webflow only, script unchanged) — list view hover follows Z's directional
+  demo: a full-row fill in the brand colour (row link `::after`, `--yfl-c`) scales in
+  from the edge the pointer enters by and retracts toward the edge it leaves by
+  (`--yfl-o`, set in the list view embed's script). The thumbnail tile stays as it was;
+  the old clip-path flood out of the tile is gone.
 - 2026-10-27 (Webflow only, script unchanged) — restyled to Z's Figma (YF Website 2026 — For
   Zia, node 4967:23963): soft filled 430px search pill (no border), regular-weight count,
   light sentence-case Reset, grid/list as a pale track with a yellow knob, active chips on

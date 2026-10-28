@@ -1,4 +1,4 @@
-/* YF - Work page grid + filter  ·  v2.3.0  (2026-10-28, ZF-PC)
+/* YF - Work page grid + filter  ·  v2.3.1  (2026-10-28, ZF-PC)
  * ---------------------------------------------------------------------------
  * Drives yfkk.co/work: the bento grid, the progressive reveal, and the filter.
  * An always-visible SEARCH BAR in the filter strip at the top of the grid (the
@@ -439,8 +439,9 @@ function init(){
       panel.classList.add('is-open');
       if(!fx)return;
       var h=panel.offsetHeight;panel.style.overflow='hidden';
-      panelFx=panel.animate([{height:'0px',marginTop:(-gap)+'px',opacity:0},{height:h+'px',marginTop:'0px',opacity:1}],{duration:450,easing:EASE});
-      panelFx.onfinish=settle;
+      var ao=panelFx=panel.animate([{height:'0px',marginTop:(-gap)+'px',opacity:0},{height:h+'px',marginTop:'0px',opacity:1}],{duration:450,easing:EASE});
+      var openDone=function(){if(panelFx===ao)settle();};
+      ao.onfinish=openDone;setTimeout(openDone,550); // timer: background tabs hold back finish events
       return;
     }
     var r=panel.getBoundingClientRect(),away=r.bottom<=navBottom();
@@ -453,7 +454,8 @@ function init(){
     }
     var hh=panel.offsetHeight;panel.style.overflow='hidden';
     var an=panelFx=panel.animate([{height:hh+'px',marginTop:'0px',opacity:1},{height:'0px',marginTop:(-gap)+'px',opacity:0}],{duration:380,easing:EASE});
-    an.onfinish=function(){if(panelFx!==an)return;panel.classList.remove('is-open');an.cancel();settle();};
+    var closeDone=function(){if(panelFx!==an)return;panel.classList.remove('is-open');an.cancel();settle();};
+    an.onfinish=closeDone;setTimeout(closeDone,480); // timer: background tabs hold back finish events
   }
   function setQuery(v){
     q=(v||'').trim();
@@ -505,7 +507,7 @@ function init(){
   computeBatch();
   renderLimit=INITIAL;
   relayout();
-  window.yfWorkFilter={version:'2.3.0',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
+  window.yfWorkFilter={version:'2.3.1',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
 }
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
 })();

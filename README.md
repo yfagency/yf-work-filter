@@ -159,6 +159,10 @@ bumped `version` in `window.yfWorkFilter`.
   each row's tile colour is flattened onto the grid ground once after load (`--yfl-c` on
   the row, `.has-flat`), the tile is drawn solid in it (looks exactly as before) and the
   slider uses the same value. Tile and slider are one colour.
+  Then still a darker third shade: the tile class (`.workprojectoverlay`) has
+  `mix-blend-mode: multiply`, so over the slider it multiplied the colour by itself. In
+  the list the tile blends normally, and `--yfl-c` includes that multiply onto the grid
+  ground, so at rest it looks exactly as before and on hover tile = bar to the pixel.
 - v2.4.0 (2026-10-28) — each panel column heading shows "selected / total" ("01 / 07"),
   muted at rest (yfwrk-panel-hn, Text Light) and Brand/Dark once the column has a
   selection. Each column ends in a native "More options arrow" (yfwrk-panel-more +

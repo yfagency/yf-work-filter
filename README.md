@@ -17,7 +17,7 @@ rejects `<script>` from the API. The script is past the cap and its comments are
 record of several hard-won fixes. Hosting it here removes the cap, puts it in version
 control, and makes changes reviewable as diffs.
 
-## How it is wired (v2.2)
+## How it is wired (v2.3)
 
 Everything you can see is a native Webflow element with a real class bound to variables,
 so the Designer canvas matches the live page. The script only reads, clones and toggles.
@@ -88,8 +88,13 @@ with no readable facet never matches that filter.
 - State lives in the URL: `?solution=Brand&year=2025&q=…`, so filtered views can be shared.
 - Every change sends a GA4 `filter_apply` event (`filter_facet`, `filter_value`,
   `filter_action`, `results`).
-- The panel opens on a click or focus in the search bar and on typing; it closes on
-  Show results, Esc, Enter in the search, or a click anywhere outside it and the bar.
+- The filter strip (`ZPageContentWrap` + `WorkStrip` combo) scrolls with the page; it is
+  not sticky since v2.3. The panel is an in-flow section of the strip, under the search
+  row and the chips: it opens on a click or focus in the search bar and on typing,
+  pushes the grid down (height animation, 0.45s), and stays open while you filter. It
+  closes only on **Hide filters** (`[data-yf-panel-close]`) or Esc. If the panel has
+  been scrolled fully out of view when it closes, the page shifts so the grid does not
+  jump.
 - Filter animation (search, options, chips, Reset): leaving tiles fade and shrink in
   place (0.22s, grid only; list rows leave at once), staying tiles glide to their new
   cell and resize between 1x1 and 2x2 (0.6s, `cubic-bezier(0.16, 1, 0.3, 1)`, 15ms
@@ -131,6 +136,12 @@ bumped `version` in `window.yfWorkFilter`.
 
 ## History
 
+- v2.3.2 (2026-10-28) — filter strip no longer sticky (new `WorkStrip` combo replaces
+  `Sticky` + `Work` on the strip); the panel is an in-flow push-down section that stays
+  open until **Hide filters** (was "Show results") or Esc — no click-outside or Enter
+  close, no scroll-to-grid on each filter change. Panel moved below the search row.
+  Timer fallbacks so animations always settle when a background tab holds back finish
+  events.
 - v2.2.0 (2026-10-28) — option hover peek removed (Z: it whited out the grid). A filter
   change now assembles the grid (fade out, glide, rise in) instead of teleporting tiles,
   using the reveal's own easing so the lazy loader reads as the same motion. States

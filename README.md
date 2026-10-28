@@ -137,6 +137,13 @@ bumped `version` in `window.yfWorkFilter`.
 
 ## History
 
+- 2026-10-28 (Webflow only, script unchanged) — list view hover is ONE slider: a single
+  colour block (`.yfl-follow`, made by the list view embed's script, behind every row)
+  grows in from the entry edge, glides and stretches to whichever row is under the
+  pointer while blending to its brand colour, and retracts toward the exit edge. A fast
+  sweep is one continuous movement instead of a trail of half-finished per-row fills.
+  The lit row gets `.is-hot` (light text) instead of `:hover`. Colour is flattened onto
+  the grid ground (#work-grid background), so it matches the thumbnail tile.
 - v2.4.0 (2026-10-28) — each panel column heading shows "selected / total" ("01 / 07"),
   muted at rest (yfwrk-panel-hn, Text Light) and Brand/Dark once the column has a
   selection. Each column ends in a native "More options arrow" (yfwrk-panel-more +

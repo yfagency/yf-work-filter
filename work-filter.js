@@ -219,7 +219,8 @@ function init(){
     var o=parseFloat(getComputedStyle(c).opacity);if(isNaN(o))o=1;
     var a=c.animate([{opacity:o,transform:'scale(1)'},{opacity:0,transform:'scale(0.96)'}],{duration:220,easing:'ease',fill:'forwards'});
     c._fx=a;
-    a.onfinish=function(){if(c._fx!==a)return;c._fx=null;if(c._out){c._out=false;c.style.display='none';c.style.pointerEvents='';}a.cancel();};
+    var done=function(){if(c._fx!==a)return;c._fx=null;if(c._out){c._out=false;c.style.display='none';c.style.pointerEvents='';}a.cancel();};
+    a.onfinish=done;setTimeout(done,320);
   }
   function boxOf(c,L){var r=c.getBoundingClientRect();return {x:r.left-L.left,y:r.top-L.top,w:r.width,h:r.height};}
 

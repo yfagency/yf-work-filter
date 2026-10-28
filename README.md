@@ -48,7 +48,8 @@ The old inline footer script, the v1 nav embed and the v2.0 dropdown pills are g
 [data-workfilter]                                 the filter bar (position: relative)
   [data-yf-panel]                                 filter panel; .is-open while open
     [data-yf-facet="solution|tactic|industry|region|company|year"]   one column each
-      [data-yf-facet-label] [data-yf-facet-n]     heading + selected-count badge
+      [data-yf-facet-label] [data-yf-facet-n]     heading + "selected / total" ("01 / 07")
+      [data-yf-panel-more]                        more-options arrow (.is-end = hidden)
       [data-yf-template="option"]                 cloned once per value
         [data-yf-opt-label] [data-yf-opt-n] [data-yf-opt-mark]
     [data-yf-panel-close]                         "Show results"
@@ -136,6 +137,12 @@ bumped `version` in `window.yfWorkFilter`.
 
 ## History
 
+- v2.4.0 (2026-10-28) — each panel column heading shows "selected / total" ("01 / 07"),
+  muted at rest (yfwrk-panel-hn, Text Light) and Brand/Dark once the column has a
+  selection. Each column ends in a native "More options arrow" (yfwrk-panel-more +
+  yfwrk-panel-more-icon, the nav chevron mask over a Brand/Light fade) because macOS
+  hides scrollbars: shown while options sit below the fold, hidden (.is-end) at the end
+  or when the column does not scroll; a click scrolls the column down.
 - 2026-10-28 (Webflow only, script unchanged) — at the 1440px+ breakpoint (Webflow xl)
   the active chips sit on the search row, right after the search bar (yfwrk-search and
   yfwrk-crumbs-list order -1; yfwrk-crumbs-count margin-left auto keeps the count, Reset

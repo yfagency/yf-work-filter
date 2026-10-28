@@ -1,4 +1,4 @@
-/* YF - Work page grid + filter  ·  v2.3.1  (2026-10-28, ZF-PC)
+/* YF - Work page grid + filter  ·  v2.3.2  (2026-10-28, ZF-PC)
  * ---------------------------------------------------------------------------
  * Drives yfkk.co/work: the bento grid, the progressive reveal, and the filter.
  * An always-visible SEARCH BAR in the filter strip at the top of the grid (the
@@ -441,7 +441,7 @@ function init(){
       if(!fx)return;
       var h=panel.offsetHeight;panel.style.overflow='hidden';
       var ao=panelFx=panel.animate([{height:'0px',marginTop:(-gap)+'px',opacity:0},{height:h+'px',marginTop:'0px',opacity:1}],{duration:450,easing:EASE});
-      var openDone=function(){if(panelFx===ao)settle();};
+      var openDone=function(){if(panelFx===ao){ao.cancel();settle();}};
       ao.onfinish=openDone;setTimeout(openDone,550); // timer: background tabs hold back finish events
       return;
     }
@@ -508,7 +508,7 @@ function init(){
   computeBatch();
   renderLimit=INITIAL;
   relayout();
-  window.yfWorkFilter={version:'2.3.1',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
+  window.yfWorkFilter={version:'2.3.2',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
 }
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
 })();

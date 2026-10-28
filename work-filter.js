@@ -1,4 +1,4 @@
-/* YF - Work page grid + filter  ·  v2.3.2  (2026-10-28, ZF-PC)
+/* YF - Work page grid + filter  ·  v2.4.0  (2026-10-28, ZF-PC)
  * ---------------------------------------------------------------------------
  * Drives yfkk.co/work: the bento grid, the progressive reveal, and the filter.
  * An always-visible SEARCH BAR in the filter strip at the top of the grid (the
@@ -44,7 +44,14 @@
  *   [data-yf-facet="<key>"]            one column per facet; key = solution |
  *                                      tactic | industry | region | company | year
  *     [data-yf-facet-label]             column heading (used in aria labels)
- *     [data-yf-facet-n]                 selected-count badge in the heading
+ *     [data-yf-facet-n]                 "selected / total" in the heading, always
+ *                                       shown ("01 / 07"); column gets .is-active
+ *                                       when anything in it is selected
+ *     [data-yf-panel-more]              arrow at the bottom of the column: there
+ *                                       are more options below (macOS hides
+ *                                       scrollbars). .is-end once the list is
+ *                                       scrolled to the end or does not scroll;
+ *                                       a click scrolls the list down
  *     [data-yf-template="option"]       option template, cloned per value
  *       [data-yf-opt-label] [data-yf-opt-n] [data-yf-opt-mark]
  *   [data-yf-crumbs]                   breadcrumb row
@@ -331,7 +338,14 @@ function init(){
       });
       holder.appendChild(o);opts[v]=o;
     });
-    ui[f]={box:box,badge:badge,opts:opts,name:name};
+    // MORE ARROW (v2.4): shows while the column has options below the fold
+    var more=box.querySelector('[data-yf-panel-more]');
+    function moreState(){if(more)more.classList.toggle('is-end',holder.scrollTop+holder.clientHeight>=holder.scrollHeight-2);}
+    if(more){
+      holder.addEventListener('scroll',moreState,{passive:true});
+      more.addEventListener('click',function(e){e.preventDefault();holder.scrollBy({top:Math.max(40,holder.clientHeight*0.8),behavior:still?'auto':'smooth'});});
+    }
+    ui[f]={box:box,badge:badge,opts:opts,name:name,total:Object.keys(opts).length,moreState:moreState};
   });
 
   /* ---- breadcrumb ---- */
@@ -373,7 +387,7 @@ function init(){
         if(isOn)n++;
       });
       u.box.classList.toggle('is-active',n>0);
-      if(u.badge){u.badge.textContent=n?pad(n):'';u.badge.hidden=!n;}
+      if(u.badge){u.badge.textContent=pad(n)+' / '+pad(u.total);u.badge.hidden=false;u.badge.setAttribute('aria-label',n+' of '+u.total+' selected');}
     });
     if(crumbHolder){
       crumbHolder.querySelectorAll('[data-yf-crumb]').forEach(function(c){c.remove();});
@@ -424,6 +438,8 @@ function init(){
   var sZone=(sBox&&sBox.querySelector('[data-yf-search-field]'))||sBox;
   var sTimer=0,tTimer=0;
   var panelOpen=false,panelFx=null;
+  function moreAll(){FACETS.forEach(function(f){if(ui[f]&&ui[f].moreState)ui[f].moreState();});}
+  window.addEventListener('resize',function(){if(panelOpen)moreAll();});
   function isOpen(){return panelOpen;}
   function navBottom(){var n=document.querySelector('.znavbar');return n?Math.max(0,n.getBoundingClientRect().bottom):0;}
   function openPanel(open){
@@ -438,6 +454,7 @@ function init(){
     function settle(){panel.style.overflow='';panelFx=null;}
     if(open){
       panel.classList.add('is-open');
+      moreAll();
       if(!fx)return;
       var h=panel.offsetHeight;panel.style.overflow='hidden';
       var ao=panelFx=panel.animate([{height:'0px',marginTop:(-gap)+'px',opacity:0},{height:h+'px',marginTop:'0px',opacity:1}],{duration:450,easing:EASE});
@@ -508,7 +525,7 @@ function init(){
   computeBatch();
   renderLimit=INITIAL;
   relayout();
-  window.yfWorkFilter={version:'2.3.2',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
+  window.yfWorkFilter={version:'2.4.0',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
 }
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
 })();

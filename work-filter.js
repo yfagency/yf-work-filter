@@ -1,11 +1,21 @@
-/* YF - Work page grid + filter  ·  v2.1.2  (2026-10-27, ZF-PC)
+/* YF - Work page grid + filter  ·  v2.2.0  (2026-10-28, ZF-PC)
  * ---------------------------------------------------------------------------
  * Drives yfkk.co/work: the bento grid, the progressive reveal, and the filter.
  * Interaction is Work Mosaic's (YF Builds): an always-visible SEARCH BAR in the
  * filter row under the nav; clicking or typing in it drops a FILTER PANEL with
  * one column per facet (Solution, Tactic, Industry, Region, Company, Year).
- * Hovering an option PEEKS: the tiles it would hide dim. The same row holds the
- * count, the active chips, Reset and the grid/list toggle.
+ * The same row holds the count, the active chips, Reset and the grid/list
+ * toggle. There is no hover preview (the v2.1 "peek" was removed 2026-10-28).
+ *
+ * FILTER ANIMATION (v2.2, 2026-10-28) - a filter change ASSEMBLES the grid
+ * instead of teleporting it. Tiles that drop out fade and shrink in place
+ * (0.22s); tiles that stay glide from where they were to their new cell,
+ * resizing if they change between 1x1 and 2x2 (0.6s); tiles that come in go
+ * through the SAME rise-and-fade as the progressive reveal (#work-grid
+ * [data-yf-anim] .yf-in), starting just after the glide and staggered, so the
+ * lazy loader that brings in the rest further down looks like the same motion.
+ * Same easing as the reveal: cubic-bezier(0.16, 1, 0.3, 1). Scrolling batches,
+ * resizes and the view switch never animate. Reduced motion: no animation.
  *
  * WHY A HOSTED FILE. The Work page's own footer code is capped at 10,000
  * characters and the grid engine alone was at ~9,840. This file has no cap,
@@ -41,8 +51,6 @@
  *   [data-yf-search]                   search bar (filter row, one only); gets
  *                                      .is-open with the panel, .has-q with text
  *     [data-yf-search-input] [data-yf-search-close] (clears the text)
- *   #work-grid.is-peek                 while an option is hovered; matching
- *     cards get .is-peek-hit, --yf-peek on the grid = the option's colour
  *
  * WHERE EACH FACET IS READ FROM - the CMS-bound elements already in every card
  * (added for the list view, 2026-10-20/21). Exact text, never a prefix match.
@@ -155,13 +163,14 @@ function init(){
     INITIAL=perScreen+cols;BATCH=perScreen;
   }
   var hasIO=(typeof IntersectionObserver!=='undefined');
+  var enterAt=0; // filter changes hold arriving tiles until the glide is under way
   // ARRIVAL COVER (2026-10-20): tiles rise as the YF Arrival Cover starts its
   // fade, not unseen underneath it. 4s cap matches the cover's CSS fallback.
   function afterCover(fn){var c=document.getElementById('yfload');if(!c||c.classList.contains('is-done'))return fn();var go=0,mo;function run(){if(go)return;go=1;if(mo)mo.disconnect();fn();}mo=new MutationObserver(function(){if(c.classList.contains('is-done'))run();});mo.observe(c,{attributes:true});setTimeout(run,4000);}
   var revealIO=hasIO?new IntersectionObserver(function(entries){
     var batch=[];
     entries.forEach(function(e){if(!e.isIntersecting)return;revealIO.unobserve(e.target);batch.push(e.target);});
-    afterCover(function(){batch.forEach(function(el,i){setTimeout(function(){el.classList.add('yf-in');},Math.min(i,10)*50);});});
+    afterCover(function(){var d=Math.max(0,enterAt-Date.now());batch.forEach(function(el,i){setTimeout(function(){el.classList.add('yf-in');},d+Math.min(i,10)*50);});});
   },{rootMargin:'0px 0px -5% 0px',threshold:0.05}):null;
   function armReveal(items){
     items.forEach(function(el){
@@ -193,17 +202,71 @@ function init(){
   }
   function pad(n){return n<10?'0'+n:''+n;}
 
-  function relayout(){
-    var src=wrap.classList.contains('is-list')?byYear:cards;
+  /* ---- filter animation (v2.2) ---- */
+  var EASE='cubic-bezier(0.16, 1, 0.3, 1)';
+  var still=!!(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  function stopFx(c){
+    if(c._fx){try{c._fx.cancel();}catch(e){}c._fx=null;}
+    if(c._out){c._out=false;c.style.display='none';c.style.pointerEvents='';}
+  }
+  function fadeOut(c){
+    c._out=true;c.style.pointerEvents='none';
+    var o=parseFloat(getComputedStyle(c).opacity);if(isNaN(o))o=1;
+    var a=c.animate([{opacity:o,transform:'scale(1)'},{opacity:0,transform:'scale(0.96)'}],{duration:220,easing:'ease',fill:'forwards'});
+    c._fx=a;
+    a.onfinish=function(){if(c._fx!==a)return;c._fx=null;if(c._out){c._out=false;c.style.display='none';c.style.pointerEvents='';}a.cancel();};
+  }
+  function boxOf(c,L){var r=c.getBoundingClientRect();return {x:r.left-L.left,y:r.top-L.top,w:r.width,h:r.height};}
+
+  function relayout(animate){
+    var fx=!!(animate&&!still&&list.animate);
+    var isList=wrap.classList.contains('is-list');
+    var before=null;
+    if(fx){
+      // measure where every visible tile is right now (mid-flight included),
+      // relative to the list so a scroll in between cannot skew it
+      before=new Map();var L=list.getBoundingClientRect();
+      cards.forEach(function(c){if(c.style.display!=='none'&&!c._out)before.set(c,boxOf(c,L));});
+      cards.forEach(stopFx);
+    }
+    var src=isList?byYear:cards;
     var matched=src.filter(function(card){return matches(card,null);});
     matchedCount=matched.length;
     if(!hasIO)renderLimit=matchedCount;
     if(renderLimit<INITIAL)renderLimit=INITIAL;
     var shown=matched.slice(0,renderLimit);
     var on=new Set(shown);
-    cards.forEach(function(card){card.style.display=on.has(card)?'':'none';});
+    cards.forEach(function(card){
+      if(on.has(card)){card.style.display='';return;}
+      // grid tiles are absolutely placed, so a leaving tile can fade where it
+      // stands; list rows are in flow and leave at once
+      if(fx&&!isList&&before.has(card))fadeOut(card);else card.style.display='none';
+    });
     layout(shown);
+    if(fx){
+      // arriving tiles re-run the progressive reveal, just after the glide starts
+      enterAt=Date.now()+160;
+      shown.forEach(function(c){
+        if(before.has(c))return;
+        c.classList.remove('yf-in');c.removeAttribute('data-yf-armed');
+        if(revealIO)revealIO.unobserve(c);
+      });
+    }
     armReveal(shown);
+    if(fx){
+      var L2=list.getBoundingClientRect(),k=0;
+      shown.forEach(function(c){
+        var a=before.get(c);if(!a)return;
+        var b=boxOf(c,L2);
+        var dx=a.x-b.x,dy=a.y-b.y,resized=Math.abs(a.w-b.w)>1||Math.abs(a.h-b.h)>1;
+        if(Math.abs(dx)<1&&Math.abs(dy)<1&&!resized)return;
+        var kf=(resized&&!isList)
+          ?[{left:a.x+'px',top:a.y+'px',width:a.w+'px',height:a.h+'px'},{left:c.style.left,top:c.style.top,width:c.style.width,height:c.style.height}]
+          :[{transform:'translate('+dx+'px,'+dy+'px)'},{transform:'translate(0,0)'}];
+        var an=c.animate(kf,{duration:600,easing:EASE,delay:Math.min(k++,12)*15});
+        c._fx=an;an.onfinish=function(){if(c._fx===an)c._fx=null;};
+      });
+    }
     wrap.appendChild(sentinel);
     wrap.toggleAttribute('data-yf-empty',matchedCount===0);
     paint();
@@ -239,19 +302,6 @@ function init(){
     }
     return '';
   }
-  var canHover=!!(window.matchMedia&&window.matchMedia('(hover:hover) and (pointer:fine)').matches);
-  /* PEEK (Work Mosaic): hovering an option outlines the visible tiles it would
-     keep, in its colour, and dims the rest. Mouse only. */
-  function peek(f,v,acc){
-    wrap.classList.add('is-peek');
-    wrap.style.setProperty('--yf-peek',acc||'var(--brand--dark)');
-    cards.forEach(function(c){c.classList.toggle('is-peek-hit',c._v[f].indexOf(v)!==-1);});
-  }
-  function unpeek(){
-    if(!wrap.classList.contains('is-peek'))return;
-    wrap.classList.remove('is-peek');
-    cards.forEach(function(c){c.classList.remove('is-peek-hit');});
-  }
   document.querySelectorAll('[data-yf-facet]').forEach(function(box){
     var f=box.getAttribute('data-yf-facet');if(FACETS.indexOf(f)===-1)return;
     var tpl=box.querySelector('[data-yf-template="option"]');if(!tpl)return;
@@ -267,16 +317,11 @@ function init(){
       if(o.tagName==='BUTTON')o.type='button';
       var lab=o.querySelector('[data-yf-opt-label]');if(lab)lab.textContent=v;
       var acc=accentFor(f,v);if(acc)o.style.setProperty('--yf-accent',acc);
-      if(canHover){
-        o.addEventListener('mouseenter',function(){if(!o.classList.contains('is-zero'))peek(f,v,acc);});
-        o.addEventListener('mouseleave',unpeek);
-      }
       o.addEventListener('click',function(e){
         e.preventDefault();e.stopPropagation();
         if(o.getAttribute('aria-disabled')==='true'&&!sel[f][v])return;
         sel[f][v]=!sel[f][v];
         changed(f,v,sel[f][v]?'add':'remove');
-        if(canHover&&o.matches(':hover'))peek(f,v,acc);
       });
       holder.appendChild(o);opts[v]=o;
     });
@@ -369,7 +414,7 @@ function init(){
     if(top<off-1)window.scrollTo({top:window.scrollY+top-off,behavior:'auto'});
   }
   function changed(f,v,action){
-    renderLimit=INITIAL;relayout();writeURL();scrollToGrid();track(f,v,action);
+    renderLimit=INITIAL;relayout(true);writeURL();scrollToGrid();track(f,v,action);
   }
 
   /* ---- search bar + filter panel (Work Mosaic) ---- */
@@ -386,13 +431,12 @@ function init(){
     panel.classList.toggle('is-open',open);
     if(sBox)sBox.classList.toggle('is-open',open);
     if(sInput)sInput.setAttribute('aria-expanded',open?'true':'false');
-    if(!open)unpeek();
   }
   function setQuery(v){
     q=(v||'').trim();
     if(sInput&&sInput.value!==v)sInput.value=v;
     if(sBox)sBox.classList.toggle('has-q',!!q);
-    renderLimit=INITIAL;relayout();writeURL();
+    renderLimit=INITIAL;relayout(true);writeURL();
     clearTimeout(tTimer);if(q)tTimer=setTimeout(function(){track('search',q,'search');},1200);
   }
   if(panel){
@@ -401,7 +445,6 @@ function init(){
       if(b.tagName==='BUTTON')b.type='button';
       b.addEventListener('click',function(e){e.preventDefault();openPanel(false);scrollToGrid();});
     });
-    panel.addEventListener('mouseleave',unpeek);
     // click outside the panel and the search bar closes it (Mosaic's scrim)
     document.addEventListener('pointerdown',function(e){
       if(!isOpen())return;
@@ -443,7 +486,7 @@ function init(){
   computeBatch();
   renderLimit=INITIAL;
   relayout();
-  window.yfWorkFilter={version:'2.1.2',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
+  window.yfWorkFilter={version:'2.2.0',state:function(){var o={q:q};FACETS.forEach(function(f){o[f]=picked(f);});return o;},count:function(){return matchedCount;}};
 }
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',init);}else{init();}
 })();

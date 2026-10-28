@@ -136,6 +136,10 @@ bumped `version` in `window.yfWorkFilter`.
 
 ## History
 
+- 2026-10-28 (Webflow only, script unchanged) — at the 1440px+ breakpoint (Webflow xl)
+  the active chips sit on the search row, right after the search bar (yfwrk-search and
+  yfwrk-crumbs-list order -1; yfwrk-crumbs-count margin-left auto keeps the count, Reset
+  and toggle on the right with or without chips). Below 1440 they keep their own row.
 - v2.3.2 (2026-10-28) — filter strip no longer sticky (new `WorkStrip` combo replaces
   `Sticky` + `Work` on the strip); the panel is an in-flow push-down section that stays
   open until **Hide filters** (was "Show results") or Esc — no click-outside or Enter
